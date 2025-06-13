@@ -10,8 +10,8 @@ import logging
 import time
 import random
 
-from config.settings import settings
-from src.models import ExtractedContent
+from ..config.settings import settings
+from .models import ExtractedContent
 
 logger = logging.getLogger(__name__)
 

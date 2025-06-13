@@ -1,0 +1,12 @@
+include README.md
+include LICENSE
+include requirements.txt
+recursive-include examples *.py
+recursive-include webextract *.py
+global-exclude *.pyc
+global-exclude __pycache__
+global-exclude .git*
+global-exclude *.log
+global-exclude dist/
+global-exclude build/
+global-exclude *.egg-info/ 

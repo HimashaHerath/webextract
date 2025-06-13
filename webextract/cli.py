@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""WebExtract - Turn any webpage into structured data using LLMs"""
+"""LLM WebExtract CLI interface."""
 
 import json
 import logging
@@ -12,12 +12,12 @@ from rich.table import Table
 from rich.panel import Panel
 from rich.progress import Progress, SpinnerColumn, TextColumn
 
-from src.extractor import DataExtractor
-from src.models import ExtractionConfig
-from config.settings import settings
+from .core.extractor import DataExtractor
+from .core.models import ExtractionConfig
+from .config.settings import settings
 
 app = typer.Typer(
-    name="webextract",
+    name="llm-webextract",
     help="Turn any webpage into structured data using LLMs",
     add_completion=False
 )
@@ -27,24 +27,24 @@ logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler('scraper.log'),
+        logging.FileHandler('webextract.log'),
         logging.StreamHandler()
     ]
 )
 
 
 @app.command()
-def scrape(
-    url: str = typer.Argument(..., help="URL to scrape"),
+def extract(
+    url: str = typer.Argument(..., help="URL to extract from"),
     output_format: str = typer.Option("json", "--format", "-f", help="Output format (json, pretty)"),
     output_file: Optional[str] = typer.Option(None, "--output", "-o", help="Output file path"),
-    model: str = typer.Option(settings.DEFAULT_MODEL, "--model", "-m", help="Ollama model to use"),
+    model: str = typer.Option(settings.DEFAULT_MODEL, "--model", "-m", help="LLM model to use"),
     max_content: int = typer.Option(settings.MAX_CONTENT_LENGTH, "--max-content", help="Max content length"),
     summary: bool = typer.Option(False, "--summary", "-s", help="Include brief summary"),
     custom_prompt: Optional[str] = typer.Option(None, "--prompt", "-p", help="Custom extraction prompt"),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Verbose output")
 ):
-    """Scrape a webpage and extract structured data."""
+    """Extract structured data from a webpage."""
     
     # Validate URL format
     from urllib.parse import urlparse
@@ -62,7 +62,7 @@ def scrape(
         console.print("❌ Invalid output format. Use 'json' or 'pretty'", style="bold red")
         raise typer.Exit(1)
     
-    console.print(f"📊 Starting WebExtract", style="bold green")
+    console.print(f"🤖 LLM WebExtract v1.0.0", style="bold green")
     console.print(f"📄 URL: {url}")
     console.print(f"🤖 Model: {model}")
     if verbose:
@@ -81,7 +81,7 @@ def scrape(
     extractor = DataExtractor(config)
     
     # Test connection first
-    console.print("🔍 Testing Ollama connection...")
+    console.print("🔍 Testing connection...")
     if not extractor.test_connection():
         console.print("❌ Connection test failed. Please check:", style="bold red")
         console.print("  • Ollama is running (ollama serve)")
@@ -115,25 +115,8 @@ def scrape(
         progress.update(task, completed=100)
     
     if not result:
-        console.print("❌ Failed to extract data. Common causes:", style="bold red")
-        console.print("  • Website blocks automated requests (403/429)")
-        console.print("  • Network connectivity issues")
-        console.print("  • Invalid or unreachable URL")
-        console.print("  • Server errors (5xx)")
-        console.print("  • DNS resolution failures")
-        console.print("  • Content too short or empty")
-        console.print("  • Media files (images, videos) instead of HTML")
-        if verbose:
-            console.print("\n💡 Troubleshooting tips:")
-            console.print("  • Check if the URL is accessible in a browser")
-            console.print("  • Some sites may require specific user agents")
-            console.print("  • Try again later if the site is temporarily down")
-            console.print("  • Check your internet connection")
+        console.print("❌ Failed to extract data", style="bold red")
         raise typer.Exit(1)
-    
-    # Check for extraction warnings
-    if result.structured_info.get('error'):
-        console.print(f"⚠️ Warning: {result.structured_info['error']}", style="yellow")
     
     # Output results
     try:
@@ -149,13 +132,6 @@ def scrape(
             else:
                 console.print_json(data=json_output)
         
-        # Performance summary
-        if verbose or result.confidence < 0.7:
-            confidence_color = "green" if result.confidence >= 0.8 else "yellow" if result.confidence >= 0.5 else "red"
-            console.print(f"📊 Confidence: {result.confidence:.2f}", style=confidence_color)
-            console.print(f"📄 Content length: {len(result.content.main_content)} characters")
-            console.print(f"🔗 Links found: {len(result.content.links)}")
-        
         console.print(f"✅ Extraction completed successfully!", style="bold green")
         
     except Exception as e:
@@ -165,44 +141,24 @@ def scrape(
 
 @app.command()
 def test():
-    """Test Ollama connection and model availability."""
-    console.print("🔧 Testing WebExtract setup...", style="bold blue")
+    """Test connection and model availability."""
+    console.print("🔧 Testing LLM WebExtract setup...", style="bold blue")
     
     extractor = DataExtractor()
     
     if extractor.test_connection():
-        console.print("✅ All tests passed! You're ready to scrape.", style="bold green")
+        console.print("✅ All tests passed! You're ready to extract.", style="bold green")
     else:
-        console.print("❌ Setup test failed. Please check your Ollama installation.", style="bold red")
+        console.print("❌ Setup test failed. Please check your configuration.", style="bold red")
         raise typer.Exit(1)
 
 
 @app.command()
-def example():
-    """Run an example extraction on a test webpage."""
-    console.print("📝 Running example extraction...", style="bold blue")
-    
-    # Use a reliable test URL
-    test_url = "https://example.com"
-    
-    config = ExtractionConfig(custom_prompt="Extract key information from this webpage.")
-    extractor = DataExtractor(config)
-    
-    if not extractor.test_connection():
-        console.print("❌ Cannot run example - Ollama connection failed", style="bold red")
-        raise typer.Exit(1)
-    
-    console.print(f"🌐 Extracting from: {test_url}")
-    result = extractor.extract(test_url)
-    
-    if result:
-        display_pretty_output(result)
-        console.print("✅ Example completed successfully!", style="bold green")
-    else:
-        console.print("❌ Example extraction failed", style="bold red")
-
-
-
+def version():
+    """Show version information."""
+    from . import __version__, __author__
+    console.print(f"LLM WebExtract v{__version__}")
+    console.print(f"Author: {__author__}")
 
 
 def display_pretty_output(result):
@@ -246,5 +202,10 @@ def display_pretty_output(result):
         console.print(Panel(links_text, title="🔗 Important Links", border_style="cyan"))
 
 
+def main():
+    """Main CLI entry point."""
+    app()
+
+
 if __name__ == "__main__":
-    app() 
+    main() 

@@ -4,9 +4,9 @@ import logging
 from datetime import datetime
 from typing import Optional
 
-from src.scraper import WebScraper
-from src.llm_client import OllamaClient
-from src.models import StructuredData, ExtractedContent, ExtractionConfig
+from .scraper import WebScraper
+from .llm_client import OllamaClient
+from .models import StructuredData, ExtractedContent, ExtractionConfig
 
 logger = logging.getLogger(__name__)
 
