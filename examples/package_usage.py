@@ -1,123 +1,103 @@
 #!/usr/bin/env python3
 """Comprehensive usage examples for LLM WebExtract package"""
 
-import json
+import asyncio
 
 import webextract
+from webextract import Extractor
 
 
-def basic_example():
-    """Basic extraction example"""
+async def example_basic_url_extraction():
+    """Basic URL extraction example"""
     print("🔹 Basic Example")
     print("-" * 20)
 
-    result = webextract.quick_extract("https://example.com")
-    print(f"Summary: {result.summary if hasattr(result, 'summary') else 'N/A'}")
-    print(f"Topics: {result.structured_info.get('topics', 'N/A')}")
-
-
-def custom_config_example():
-    """Custom configuration example"""
-    print("\n🔹 Custom Configuration")
-    print("-" * 25)
-
-    config = (
-        webextract.ConfigBuilder()
-        .with_model("llama3:8b")
-        .with_timeout(60)
-        .with_custom_prompt("Extract key facts and figures")
-        .build()
+    extractor = Extractor()
+    result = await extractor.extract(
+        "https://example.com", {"summary": "Brief summary of the page"}
     )
-
-    extractor = webextract.WebExtractor(config)
-    result = extractor.extract("https://news.ycombinator.com")
-
-    print(f"Title: {result.content.title}")
-    print(f"Confidence: {result.confidence}")
+    print(f"Summary: {result.get('summary', 'N/A')}")
 
 
-def profile_examples():
-    """Pre-built profile examples"""
-    print("\n🔹 Profile Examples")
-    print("-" * 18)
-
-    # News scraping
-    news_extractor = webextract.WebExtractor(webextract.ConfigProfiles.news_scraping())
-    result = news_extractor.extract("https://techcrunch.com")
-    print(f"News analysis: {result.structured_info.get('category', 'N/A')}")
-
-    # Research papers
-    research_extractor = webextract.WebExtractor(webextract.ConfigProfiles.research_papers())
-    print("Research extractor ready")
-
-
-def cloud_provider_examples():
-    """Cloud LLM provider examples"""
-    print("\n🔹 Cloud Providers")
-    print("-" * 17)
-
-    # Note: These require API keys
-    print("OpenAI example (requires API key):")
-    print("result = webextract.extract_with_openai('https://example.com', 'sk-...')")
-
-    print("Anthropic example (requires API key):")
-    print("result = webextract.extract_with_anthropic('https://example.com', 'sk-ant-...')")
-
-
-def batch_processing_example():
+async def example_batch_processing():
     """Batch processing example"""
     print("\n🔹 Batch Processing")
     print("-" * 18)
 
     urls = ["https://httpbin.org/html", "https://example.com"]
+    schema = {"title": "Page title", "description": "Brief description"}
 
-    extractor = webextract.WebExtractor()
-    results = []
-
-    for url in urls:
-        try:
-            result = extractor.extract(url)
-            results.append({"url": url, "title": result.content.title, "success": True})
-        except Exception as e:
-            results.append({"url": url, "error": str(e), "success": False})
+    extractor = Extractor()
+    results = await extractor.extract_batch(urls, schema)
 
     print(f"Processed {len(results)} URLs")
-    success_count = sum(1 for r in results if r["success"])
-    print(f"Success rate: {success_count}/{len(results)}")
+    for i, result in enumerate(results):
+        print(f"URL {i+1}: {result.get('title', 'N/A')}")
 
 
-def error_handling_example():
-    """Error handling example"""
-    print("\n🔹 Error Handling")
+async def example_custom_schema():
+    """Custom schema example"""
+    print("\n🔹 Custom Schema")
     print("-" * 16)
 
-    extractor = webextract.WebExtractor()
+    schema = {
+        "title": "Page title",
+        "main_topic": "What is the main topic discussed?",
+        "key_points": "List 3 key points from the content",
+    }
+
+    extractor = Extractor()
+    result = await extractor.extract("https://example.com", schema)
+
+    print(f"Title: {result.get('title', 'N/A')}")
+    print(f"Topic: {result.get('main_topic', 'N/A')}")
+
+
+async def example_chunked_extraction():
+    """Chunked extraction example for large content"""
+    print("\n🔹 Chunked Extraction")
+    print("-" * 20)
+
+    extractor = Extractor()
+    result = await extractor.extract(
+        "https://en.wikipedia.org/wiki/Artificial_intelligence",
+        {"summary": "Brief summary of AI", "history": "Brief history of AI development"},
+    )
+
+    print(f"AI Summary: {result.get('summary', 'N/A')}")
+    print(f"History: {result.get('history', 'N/A')}")
+
+
+def basic_sync_example():
+    """Basic sync example using the legacy API"""
+    print("\n🔹 Legacy Sync Example")
+    print("-" * 20)
 
     try:
-        result = extractor.extract("https://invalid-url-example")
+        result = webextract.quick_extract("https://example.com")
+        print(f"Result: {result}")
     except Exception as e:
-        print(f"Handled error: {type(e).__name__}")
+        print(f"Note: Legacy API may not be available: {e}")
 
 
-def main():
+async def main():
     """Run all examples"""
     print("🤖 LLM WebExtract - Package Usage Examples")
     print("=" * 50)
 
     try:
-        basic_example()
-        custom_config_example()
-        profile_examples()
-        cloud_provider_examples()
-        batch_processing_example()
-        error_handling_example()
+        await example_basic_url_extraction()
+        await example_batch_processing()
+        await example_custom_schema()
+        await example_chunked_extraction()
+        basic_sync_example()
 
         print("\n✅ All examples completed!")
 
     except Exception as e:
         print(f"❌ Example failed: {e}")
-        print("Make sure Ollama is running with a compatible model")
+        print("Make sure you have a compatible LLM provider configured")
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())

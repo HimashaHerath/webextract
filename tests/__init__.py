@@ -1,1 +1,3 @@
-# Tests for LLM WebExtract 
+# Tests for LLM WebExtract
+
+# Test package initialization
