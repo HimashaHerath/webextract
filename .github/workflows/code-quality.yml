@@ -24,11 +24,11 @@ jobs:
 
     - name: Check code formatting with black
       run: |
-        black --check --diff --color webextract/ examples/
+        black --check --diff webextract/ examples/
 
     - name: Check import sorting with isort
       run: |
-        isort --check-only --diff --color webextract/ examples/
+        isort --check-only --diff webextract/ examples/
 
   lint:
     runs-on: ubuntu-latest
