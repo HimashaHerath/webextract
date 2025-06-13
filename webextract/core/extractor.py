@@ -48,7 +48,8 @@ class DataExtractor:
                 return None
 
             logger.info(
-                f"Successfully scraped content: {len(extracted_content.main_content)} characters in {scrape_time:.2f}s"
+                f"Successfully scraped content: {len(extracted_content.main_content)} characters "
+                f"in {scrape_time:.2f}s"
             )
 
             if len(extracted_content.main_content.strip()) < 50:
