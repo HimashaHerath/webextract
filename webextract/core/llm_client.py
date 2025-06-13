@@ -17,6 +17,7 @@ class OllamaClient:
     def __init__(self, model_name: str = None):
         self.model_name = model_name or settings.DEFAULT_MODEL
         self.client = ollama.Client(host=settings.OLLAMA_BASE_URL)
+        self.max_content_length = settings.MAX_CONTENT_LENGTH
 
     def is_model_available(self) -> bool:
         """Check if the specified model is available."""
@@ -36,24 +37,18 @@ class OllamaClient:
         prompt = custom_prompt or self._get_default_prompt()
 
         full_prompt = f"""
+Content to analyze:
+{content[:self.max_content_length]}
+
 {prompt}
 
-Content to analyze:
-{content}
-
-IMPORTANT: Return ONLY a valid JSON object. Do not include any explanations, markdown formatting, or text outside the JSON.
-Start your response with {{ and end with }}.
-
-Example format:
-{{
-  "topics": ["topic1", "topic2"],
-  "entities": {{"people": ["name1"], "organizations": ["org1"]}},
-  "summary": "Brief summary here",
-  "category": "category_name",
-  "sentiment": "positive/negative/neutral",
-  "key_points": ["point1", "point2"]
-}}
+Please respond with valid JSON only.
 """
+
+        if len(content) > self.max_content_length:
+            logger.info(
+                f"Content truncated from {len(content)} to {self.max_content_length} characters"
+            )
 
         for attempt in range(settings.LLM_RETRY_ATTEMPTS):
             try:
@@ -70,11 +65,10 @@ Example format:
                     },
                 )
 
-                response_text = response["response"].strip()
+                response_text = response.get("response", "").strip()
+                logger.debug(f"LLM response length: {len(response_text)} characters")
 
-                # Try to extract JSON from the response
                 structured_data = self._extract_json_from_response(response_text)
-
                 if structured_data:
                     # Validate the structure has expected fields
                     if self._validate_structured_data(structured_data):
