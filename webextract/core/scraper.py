@@ -1,6 +1,5 @@
 """Web scraping functionality using Playwright."""
 
-import asyncio
 import logging
 import random
 import time
@@ -8,12 +7,8 @@ from typing import List, Optional
 from urllib.parse import urljoin, urlparse
 
 from bs4 import BeautifulSoup
-from playwright.async_api import Browser, Page
-from playwright.async_api import TimeoutError as PlaywrightTimeoutError
-from playwright.async_api import async_playwright
-from playwright.sync_api import Browser as SyncBrowser
-from playwright.sync_api import Page as SyncPage
 from playwright.sync_api import sync_playwright
+from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 
 from ..config.settings import settings
 from .models import ExtractedContent
@@ -80,15 +75,15 @@ class WebScraper:
                 Object.defineProperty(navigator, 'webdriver', {
                     get: () => undefined,
                 });
-                
+
                 window.chrome = {
                     runtime: {},
                 };
-                
+
                 Object.defineProperty(navigator, 'languages', {
                     get: () => ['en-US', 'en'],
                 });
-                
+
                 Object.defineProperty(navigator, 'plugins', {
                     get: () => [1, 2, 3, 4, 5],
                 });
@@ -100,21 +95,21 @@ class WebScraper:
         if self._context:
             try:
                 self._context.close()
-            except:
+            except Exception:
                 pass
             self._context = None
 
         if self._browser:
             try:
                 self._browser.close()
-            except:
+            except Exception:
                 pass
             self._browser = None
 
         if self._playwright:
             try:
                 self._playwright.stop()
-            except:
+            except Exception:
                 pass
             self._playwright = None
 
@@ -150,13 +145,21 @@ class WebScraper:
                 headers = settings.get_headers()
                 page.set_extra_http_headers(headers)
 
-                logger.info(f"Fetching {url} (attempt {attempt + 1}/{settings.RETRY_ATTEMPTS})")
+                logger.info(
+                    f"Fetching {url} (attempt {attempt + 1}/{settings.RETRY_ATTEMPTS})"
+                )
 
                 # Set longer timeout for first attempt, shorter for retries
-                timeout = settings.REQUEST_TIMEOUT * 1000 if attempt == 0 else (settings.REQUEST_TIMEOUT // 2) * 1000
+                timeout = (
+                    settings.REQUEST_TIMEOUT * 1000
+                    if attempt == 0
+                    else (settings.REQUEST_TIMEOUT // 2) * 1000
+                )
 
                 # Navigate to page
-                response = page.goto(url, wait_until="domcontentloaded", timeout=timeout)
+                response = page.goto(
+                    url, wait_until="domcontentloaded", timeout=timeout
+                )
 
                 if not response:
                     logger.warning(f"No response received for {url}")
@@ -172,15 +175,21 @@ class WebScraper:
                     logger.warning(f"Access forbidden (403) for {url}")
                     if attempt < settings.RETRY_ATTEMPTS - 1:
                         # Try with different user agent and longer delay
-                        self._context.set_extra_http_headers({"User-Agent": random.choice(settings.USER_AGENTS)})
+                        self._context.set_extra_http_headers(
+                            {"User-Agent": random.choice(settings.USER_AGENTS)}
+                        )
                         continue
                     else:
-                        logger.error(f"Persistent 403 error for {url} - site may block automated access")
+                        logger.error(
+                            f"Persistent 403 error for {url} - site may block automated access"
+                        )
                         return None
 
                 elif status_code == 429:
                     wait_time = settings.RETRY_DELAY * (2**attempt)
-                    logger.warning(f"Rate limited (429) for {url}, waiting {wait_time}s")
+                    logger.warning(
+                        f"Rate limited (429) for {url}, waiting {wait_time}s"
+                    )
                     if attempt < settings.RETRY_ATTEMPTS - 1:
                         time.sleep(wait_time)
                         continue
@@ -208,7 +217,11 @@ class WebScraper:
                     if "json" in content_type or "xml" in content_type:
                         # Still try to process JSON/XML content
                         pass
-                    elif "image" in content_type or "video" in content_type or "audio" in content_type:
+                    elif (
+                        "image" in content_type
+                        or "video" in content_type
+                        or "audio" in content_type
+                    ):
                         logger.error(f"Cannot process media content from {url}")
                         return None
 
@@ -216,11 +229,11 @@ class WebScraper:
                 try:
                     # Wait for network to be idle (no requests for 500ms)
                     page.wait_for_load_state("networkidle", timeout=5000)
-                except:
+                except Exception:
                     # If network idle fails, just wait a bit
                     try:
                         page.wait_for_timeout(2000)
-                    except:
+                    except Exception:
                         pass
 
                 # Get page content
@@ -228,11 +241,15 @@ class WebScraper:
 
                 # Validate content length
                 if len(html_content.strip()) < 100:
-                    logger.warning(f"Very short content received from {url}: {len(html_content)} chars")
+                    logger.warning(
+                        f"Very short content received from {url}: {len(html_content)} chars"
+                    )
                     if attempt < settings.RETRY_ATTEMPTS - 1:
                         continue
 
-                logger.debug(f"Successfully fetched {len(html_content)} characters from {url}")
+                logger.debug(
+                    f"Successfully fetched {len(html_content)} characters from {url}"
+                )
                 return html_content
 
             except PlaywrightTimeoutError as e:
@@ -277,7 +294,7 @@ class WebScraper:
                 if page:
                     try:
                         page.close()
-                    except:
+                    except Exception:
                         pass
 
         logger.error(f"All attempts failed for {url}")
@@ -296,7 +313,16 @@ class WebScraper:
                 return BeautifulSoup("", "html.parser")
 
         # Remove unwanted elements
-        unwanted_tags = ["script", "style", "nav", "footer", "header", "aside", "noscript", "iframe"]
+        unwanted_tags = [
+            "script",
+            "style",
+            "nav",
+            "footer",
+            "header",
+            "aside",
+            "noscript",
+            "iframe",
+        ]
         for tag in unwanted_tags:
             for element in soup.find_all(tag):
                 element.decompose()
@@ -376,7 +402,9 @@ class WebScraper:
         # Limit content length
         if len(text) > settings.MAX_CONTENT_LENGTH:
             text = text[: settings.MAX_CONTENT_LENGTH] + "..."
-            logger.debug(f"Content truncated to {settings.MAX_CONTENT_LENGTH} characters")
+            logger.debug(
+                f"Content truncated to {settings.MAX_CONTENT_LENGTH} characters"
+            )
 
         return text
 
@@ -395,7 +423,9 @@ class WebScraper:
             logger.warning(f"Error extracting links: {e}")
 
         # Remove duplicates and limit count
-        unique_links = list(dict.fromkeys(links))  # Preserves order while removing duplicates
+        unique_links = list(
+            dict.fromkeys(links)
+        )  # Preserves order while removing duplicates
         return unique_links[:20]
 
     def _is_valid_link(self, url: str) -> bool:
@@ -476,7 +506,9 @@ class WebScraper:
                 metadata["keywords"] = meta_keywords.get("content", "")
 
             # Open Graph data
-            og_tags = soup.find_all("meta", attrs={"property": lambda x: x and x.startswith("og:")})
+            og_tags = soup.find_all(
+                "meta", attrs={"property": lambda x: x and x.startswith("og:")}
+            )
             for tag in og_tags:
                 prop = tag.get("property", "").replace("og:", "")
                 content = tag.get("content", "")
@@ -484,7 +516,10 @@ class WebScraper:
                     metadata[f"og_{prop}"] = content
 
             # Twitter Card data
-            twitter_tags = soup.find_all("meta", attrs={"name": lambda x: x and x.startswith("twitter:")})
+            twitter_tags = soup.find_all(
+                "meta",
+                attrs={"name": lambda x: x and x.startswith("twitter:")},
+            )
             for tag in twitter_tags:
                 name = tag.get("name", "").replace("twitter:", "")
                 content = tag.get("content", "")

@@ -7,7 +7,13 @@ __description__ = "AI-powered web content extraction with Large Language Models"
 from .config.profiles import ConfigProfiles
 
 # Configuration imports
-from .config.settings import ConfigBuilder, FilterConfig, LLMConfig, ScrapingConfig, WebExtractConfig
+from .config.settings import (
+    ConfigBuilder,
+    FilterConfig,
+    LLMConfig,
+    ScrapingConfig,
+    WebExtractConfig,
+)
 
 # Core imports
 from .core.extractor import DataExtractor as WebExtractor
@@ -70,7 +76,9 @@ def extract_with_openai(url: str, api_key: str, model: str = "gpt-4", **kwargs):
     return extractor.extract(url)
 
 
-def extract_with_anthropic(url: str, api_key: str, model: str = "claude-3-sonnet-20240229", **kwargs):
+def extract_with_anthropic(
+    url: str, api_key: str, model: str = "claude-3-sonnet-20240229", **kwargs
+):
     """Quick extraction using Anthropic models.
 
     Args:

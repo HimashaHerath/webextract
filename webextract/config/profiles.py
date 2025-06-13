@@ -88,9 +88,21 @@ class ConfigProfiles:
     @staticmethod
     def fast_extraction():
         """Fast extraction with smaller model."""
-        return ConfigBuilder().with_model("gemma3:2b").with_content_limit(2000).with_timeout(15).build()
+        return (
+            ConfigBuilder()
+            .with_model("gemma3:2b")
+            .with_content_limit(2000)
+            .with_timeout(15)
+            .build()
+        )
 
     @staticmethod
     def accurate_extraction():
         """High accuracy extraction with larger model."""
-        return ConfigBuilder().with_model("gemma3:27b").with_content_limit(8000).with_timeout(60).build()
+        return (
+            ConfigBuilder()
+            .with_model("gemma3:27b")
+            .with_content_limit(8000)
+            .with_timeout(60)
+            .build()
+        )

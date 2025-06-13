@@ -52,12 +52,15 @@ class DataExtractor:
             )
 
             if len(extracted_content.main_content.strip()) < 50:
-                logger.warning(f"Very short content ({len(extracted_content.main_content)} chars) from {url}")
+                logger.warning(
+                    f"Very short content ({len(extracted_content.main_content)} chars) from {url}"
+                )
 
             llm_start = time.time()
             try:
                 structured_info = self.llm_client.generate_structured_data(
-                    content=extracted_content.main_content, custom_prompt=self.config.custom_prompt
+                    content=extracted_content.main_content,
+                    custom_prompt=self.config.custom_prompt,
                 )
                 llm_time = time.time() - llm_start
                 logger.info(f"LLM processing completed in {llm_time:.2f}s")
@@ -89,12 +92,16 @@ class DataExtractor:
                 confidence=confidence,
             )
 
-            logger.info(f"Extraction completed in {total_time:.2f}s with confidence: {confidence:.2f}")
+            logger.info(
+                f"Extraction completed in {total_time:.2f}s with confidence: {confidence:.2f}"
+            )
             return result
 
         except Exception as e:
             total_time = time.time() - start_time
-            logger.error(f"Critical error during extraction of {url} after {total_time:.2f}s: {e}")
+            logger.error(
+                f"Critical error during extraction of {url} after {total_time:.2f}s: {e}"
+            )
 
             try:
                 if "extracted_content" in locals() and extracted_content:
@@ -118,20 +125,26 @@ class DataExtractor:
 
             return None
 
-    def extract_with_summary(self, url: str, summary_length: int = 200) -> Optional[StructuredData]:
+    def extract_with_summary(
+        self, url: str, summary_length: int = 200
+    ) -> Optional[StructuredData]:
         """Extract data and add a brief summary."""
         result = self.extract(url)
 
         if result:
             try:
-                summary = self.llm_client.summarize_content(result.content.main_content, max_length=summary_length)
+                summary = self.llm_client.summarize_content(
+                    result.content.main_content, max_length=summary_length
+                )
                 result.structured_info["brief_summary"] = summary
             except Exception as e:
                 logger.warning(f"Failed to generate summary: {e}")
 
         return result
 
-    def _calculate_confidence(self, content: ExtractedContent, structured_info: dict) -> float:
+    def _calculate_confidence(
+        self, content: ExtractedContent, structured_info: dict
+    ) -> float:
         """Calculate a confidence score for the extraction."""
         score = 0.0
 
@@ -153,7 +166,9 @@ class DataExtractor:
             score += 0.2
 
             expected_fields = ["summary", "topics", "entities", "category"]
-            found_fields = sum(1 for field in expected_fields if field in structured_info)
+            found_fields = sum(
+                1 for field in expected_fields if field in structured_info
+            )
             score += (found_fields / len(expected_fields)) * 0.1
 
         return min(score, 1.0)
@@ -169,7 +184,7 @@ class DataExtractor:
                     models = self.llm_client.client.list()
                     for model in models["models"]:
                         print(f"  - {model['name']}")
-                except:
+                except Exception:
                     print("  Could not list available models")
                 return False
 

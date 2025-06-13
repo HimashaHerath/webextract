@@ -3,7 +3,6 @@
 
 import json
 import logging
-from pathlib import Path
 from typing import Optional
 
 import typer
@@ -16,7 +15,11 @@ from .config.settings import settings
 from .core.extractor import DataExtractor
 from .core.models import ExtractionConfig
 
-app = typer.Typer(name="llm-webextract", help="Turn any webpage into structured data using LLMs", add_completion=False)
+app = typer.Typer(
+    name="llm-webextract",
+    help="Turn any webpage into structured data using LLMs",
+    add_completion=False,
+)
 console = Console()
 
 logging.basicConfig(
@@ -29,12 +32,24 @@ logging.basicConfig(
 @app.command()
 def extract(
     url: str = typer.Argument(..., help="URL to extract from"),
-    output_format: str = typer.Option("json", "--format", "-f", help="Output format (json, pretty)"),
-    output_file: Optional[str] = typer.Option(None, "--output", "-o", help="Output file path"),
-    model: str = typer.Option(settings.DEFAULT_MODEL, "--model", "-m", help="LLM model to use"),
-    max_content: int = typer.Option(settings.MAX_CONTENT_LENGTH, "--max-content", help="Max content length"),
-    summary: bool = typer.Option(False, "--summary", "-s", help="Include brief summary"),
-    custom_prompt: Optional[str] = typer.Option(None, "--prompt", "-p", help="Custom extraction prompt"),
+    output_format: str = typer.Option(
+        "json", "--format", "-f", help="Output format (json, pretty)"
+    ),
+    output_file: Optional[str] = typer.Option(
+        None, "--output", "-o", help="Output file path"
+    ),
+    model: str = typer.Option(
+        settings.DEFAULT_MODEL, "--model", "-m", help="LLM model to use"
+    ),
+    max_content: int = typer.Option(
+        settings.MAX_CONTENT_LENGTH, "--max-content", help="Max content length"
+    ),
+    summary: bool = typer.Option(
+        False, "--summary", "-s", help="Include brief summary"
+    ),
+    custom_prompt: Optional[str] = typer.Option(
+        None, "--prompt", "-p", help="Custom extraction prompt"
+    ),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Verbose output"),
 ):
     """Extract structured data from a webpage."""
@@ -45,7 +60,10 @@ def extract(
     try:
         parsed_url = urlparse(url)
         if not parsed_url.scheme or not parsed_url.netloc:
-            console.print("❌ Invalid URL format. Please include http:// or https://", style="bold red")
+            console.print(
+                "❌ Invalid URL format. Please include http:// or https://",
+                style="bold red",
+            )
             raise typer.Exit(1)
     except Exception:
         console.print("❌ Invalid URL format", style="bold red")
@@ -53,10 +71,13 @@ def extract(
 
     # Validate output format
     if output_format.lower() not in ["json", "pretty"]:
-        console.print("❌ Invalid output format. Use 'json' or 'pretty'", style="bold red")
+        console.print(
+            "❌ Invalid output format. Use 'json' or 'pretty'",
+            style="bold red",
+        )
         raise typer.Exit(1)
 
-    console.print(f"🤖 LLM WebExtract v1.0.0", style="bold green")
+    console.print("🤖 LLM WebExtract v1.0.0", style="bold green")
     console.print(f"📄 URL: {url}")
     console.print(f"🤖 Model: {model}")
     if verbose:
@@ -65,7 +86,11 @@ def extract(
         console.print(f"💬 Custom prompt: {'Yes' if custom_prompt else 'No'}")
 
     # Create extraction config
-    config = ExtractionConfig(model_name=model, max_content_length=max_content, custom_prompt=custom_prompt)
+    config = ExtractionConfig(
+        model_name=model,
+        max_content_length=max_content,
+        custom_prompt=custom_prompt,
+    )
 
     # Initialize extractor
     extractor = DataExtractor(config)
@@ -123,7 +148,7 @@ def extract(
             else:
                 console.print_json(data=json_output)
 
-        console.print(f"✅ Extraction completed successfully!", style="bold green")
+        console.print("✅ Extraction completed successfully!", style="bold green")
 
     except Exception as e:
         console.print(f"❌ Error saving results: {e}", style="bold red")
@@ -138,9 +163,14 @@ def test():
     extractor = DataExtractor()
 
     if extractor.test_connection():
-        console.print("✅ All tests passed! You're ready to extract.", style="bold green")
+        console.print(
+            "✅ All tests passed! You're ready to extract.", style="bold green"
+        )
     else:
-        console.print("❌ Setup test failed. Please check your configuration.", style="bold red")
+        console.print(
+            "❌ Setup test failed. Please check your configuration.",
+            style="bold red",
+        )
         raise typer.Exit(1)
 
 
@@ -167,7 +197,13 @@ def display_pretty_output(result):
 
     # Content summary
     if result.content.description:
-        console.print(Panel(result.content.description, title="📝 Description", border_style="green"))
+        console.print(
+            Panel(
+                result.content.description,
+                title="📝 Description",
+                border_style="green",
+            )
+        )
 
     # Structured data
     if result.structured_info:
@@ -177,13 +213,25 @@ def display_pretty_output(result):
 
         for key, value in result.structured_info.items():
             if isinstance(value, (list, dict)):
-                value_str = json.dumps(value, indent=2)[:200] + "..." if len(str(value)) > 200 else json.dumps(value, indent=2)
+                value_str = (
+                    json.dumps(value, indent=2)[:200] + "..."
+                    if len(str(value)) > 200
+                    else json.dumps(value, indent=2)
+                )
             else:
-                value_str = str(value)[:200] + "..." if len(str(value)) > 200 else str(value)
+                value_str = (
+                    str(value)[:200] + "..." if len(str(value)) > 200 else str(value)
+                )
 
             structured_table.add_row(key, value_str)
 
-        console.print(Panel(structured_table, title="🧠 LLM Analysis", border_style="yellow"))
+        console.print(
+            Panel(
+                structured_table,
+                title="🧠 LLM Analysis",
+                border_style="yellow",
+            )
+        )
 
     # Links
     if result.content.links:
@@ -191,7 +239,9 @@ def display_pretty_output(result):
         if len(result.content.links) > 5:
             links_text += f"\n... and {len(result.content.links) - 5} more links"
 
-        console.print(Panel(links_text, title="🔗 Important Links", border_style="cyan"))
+        console.print(
+            Panel(links_text, title="🔗 Important Links", border_style="cyan")
+        )
 
 
 def main():

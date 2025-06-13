@@ -1,11 +1,9 @@
 """Enhanced configuration settings for WebExtract package."""
 
-import json
 import os
 import random
 from dataclasses import dataclass, field
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Dict, List, Optional
 
 
 @dataclass
@@ -20,8 +18,16 @@ class ScrapingConfig:
     max_requests_per_minute: int = 30
     user_agents: List[str] = field(
         default_factory=lambda: [
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/120.0.0.0 Safari/537.36"
+            ),
+            (
+                "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/120.0.0.0 Safari/537.36"
+            ),
         ]
     )
     custom_headers: Dict[str, str] = field(default_factory=dict)
@@ -46,16 +52,48 @@ class FilterConfig:
     """Configuration for content filtering."""
 
     unwanted_elements: List[str] = field(
-        default_factory=lambda: ["script", "style", "nav", "footer", "header", "aside", "noscript", "iframe"]
+        default_factory=lambda: [
+            "script",
+            "style",
+            "nav",
+            "footer",
+            "header",
+            "aside",
+            "noscript",
+            "iframe",
+        ]
     )
     unwanted_selectors: List[str] = field(
-        default_factory=lambda: [".advertisement", ".ad", ".ads", ".banner", ".popup", ".modal"]
+        default_factory=lambda: [
+            ".advertisement",
+            ".ad",
+            ".ads",
+            ".banner",
+            ".popup",
+            ".modal",
+        ]
     )
     content_selectors: List[str] = field(
-        default_factory=lambda: ["main", "article", '[role="main"]', ".main-content", ".content", "#content"]
+        default_factory=lambda: [
+            "main",
+            "article",
+            '[role="main"]',
+            ".main-content",
+            ".content",
+            "#content",
+        ]
     )
     skip_link_patterns: List[str] = field(
-        default_factory=lambda: ["javascript:", "mailto:", "tel:", "/admin", "/login", ".pdf", ".jpg", ".png"]
+        default_factory=lambda: [
+            "javascript:",
+            "mailto:",
+            "tel:",
+            "/admin",
+            "/login",
+            ".pdf",
+            ".jpg",
+            ".png",
+        ]
     )
     min_content_length: int = 10
     max_url_length: int = 200
@@ -116,7 +154,9 @@ class ConfigBuilder:
         self._config.llm.model_name = model
         return self
 
-    def with_anthropic(self, api_key: str, model: str = "claude-3-sonnet-20240229") -> "ConfigBuilder":
+    def with_anthropic(
+        self, api_key: str, model: str = "claude-3-sonnet-20240229"
+    ) -> "ConfigBuilder":
         """Configure Anthropic connection."""
         self._config.llm.provider = "anthropic"
         self._config.llm.api_key = api_key
@@ -161,8 +201,16 @@ class Settings:
     DEFAULT_OUTPUT_FORMAT: str = os.getenv("DEFAULT_OUTPUT_FORMAT", "json")
 
     USER_AGENTS: List[str] = [
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/120.0.0.0 Safari/537.36"
+        ),
+        (
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/120.0.0.0 Safari/537.36"
+        ),
     ]
 
     @classmethod
