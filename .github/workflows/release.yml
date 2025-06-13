@@ -25,6 +25,8 @@ jobs:
         python -m pip install --upgrade pip
         pip install -e .[dev]
         playwright install chromium
+        # Verify installation
+        python -c "import webextract; print('✅ Package imported successfully')"
 
     - name: Run tests
       run: |
@@ -69,12 +71,12 @@ jobs:
     - uses: actions/checkout@v4
 
     - name: Create Release
-      uses: actions/create-release@v1
+      uses: softprops/action-gh-release@v1
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         tag_name: ${{ github.ref_name }}
-        release_name: Release ${{ github.ref_name }}
+        name: Release ${{ github.ref_name }}
         body: |
           ## Changes in ${{ github.ref_name }}
           

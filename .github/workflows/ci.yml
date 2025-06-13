@@ -39,6 +39,9 @@ jobs:
         python -m pip install --upgrade pip
         pip install -e .[dev]
         playwright install chromium
+        # Verify installation
+        pip list | grep webextract || echo "Package not found in pip list"
+        python -c "import webextract; print('✅ Package imported successfully')"
 
     - name: Lint with flake8
       run: |
@@ -108,7 +111,7 @@ jobs:
       continue-on-error: true
 
     - name: Upload security report
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       if: always()
       with:
         name: security-report
@@ -139,7 +142,7 @@ jobs:
         twine check dist/*
 
     - name: Upload build artifacts
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: dist
         path: dist/ 
