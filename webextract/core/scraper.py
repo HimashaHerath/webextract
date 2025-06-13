@@ -145,9 +145,7 @@ class WebScraper:
                 headers = settings.get_headers()
                 page.set_extra_http_headers(headers)
 
-                logger.info(
-                    f"Fetching {url} (attempt {attempt + 1}/{settings.RETRY_ATTEMPTS})"
-                )
+                logger.info(f"Fetching {url} (attempt {attempt + 1}/{settings.RETRY_ATTEMPTS})")
 
                 # Set longer timeout for first attempt, shorter for retries
                 timeout = (
@@ -157,9 +155,7 @@ class WebScraper:
                 )
 
                 # Navigate to page
-                response = page.goto(
-                    url, wait_until="domcontentloaded", timeout=timeout
-                )
+                response = page.goto(url, wait_until="domcontentloaded", timeout=timeout)
 
                 if not response:
                     logger.warning(f"No response received for {url}")
@@ -187,9 +183,7 @@ class WebScraper:
 
                 elif status_code == 429:
                     wait_time = settings.RETRY_DELAY * (2**attempt)
-                    logger.warning(
-                        f"Rate limited (429) for {url}, waiting {wait_time}s"
-                    )
+                    logger.warning(f"Rate limited (429) for {url}, waiting {wait_time}s")
                     if attempt < settings.RETRY_ATTEMPTS - 1:
                         time.sleep(wait_time)
                         continue
@@ -247,9 +241,7 @@ class WebScraper:
                     if attempt < settings.RETRY_ATTEMPTS - 1:
                         continue
 
-                logger.debug(
-                    f"Successfully fetched {len(html_content)} characters from {url}"
-                )
+                logger.debug(f"Successfully fetched {len(html_content)} characters from {url}")
                 return html_content
 
             except PlaywrightTimeoutError as e:
@@ -402,9 +394,7 @@ class WebScraper:
         # Limit content length
         if len(text) > settings.MAX_CONTENT_LENGTH:
             text = text[: settings.MAX_CONTENT_LENGTH] + "..."
-            logger.debug(
-                f"Content truncated to {settings.MAX_CONTENT_LENGTH} characters"
-            )
+            logger.debug(f"Content truncated to {settings.MAX_CONTENT_LENGTH} characters")
 
         return text
 
@@ -423,9 +413,7 @@ class WebScraper:
             logger.warning(f"Error extracting links: {e}")
 
         # Remove duplicates and limit count
-        unique_links = list(
-            dict.fromkeys(links)
-        )  # Preserves order while removing duplicates
+        unique_links = list(dict.fromkeys(links))  # Preserves order while removing duplicates
         return unique_links[:20]
 
     def _is_valid_link(self, url: str) -> bool:
@@ -506,9 +494,7 @@ class WebScraper:
                 metadata["keywords"] = meta_keywords.get("content", "")
 
             # Open Graph data
-            og_tags = soup.find_all(
-                "meta", attrs={"property": lambda x: x and x.startswith("og:")}
-            )
+            og_tags = soup.find_all("meta", attrs={"property": lambda x: x and x.startswith("og:")})
             for tag in og_tags:
                 prop = tag.get("property", "").replace("og:", "")
                 content = tag.get("content", "")

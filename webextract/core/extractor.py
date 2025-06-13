@@ -99,9 +99,7 @@ class DataExtractor:
 
         except Exception as e:
             total_time = time.time() - start_time
-            logger.error(
-                f"Critical error during extraction of {url} after {total_time:.2f}s: {e}"
-            )
+            logger.error(f"Critical error during extraction of {url} after {total_time:.2f}s: {e}")
 
             try:
                 if "extracted_content" in locals() and extracted_content:
@@ -125,9 +123,7 @@ class DataExtractor:
 
             return None
 
-    def extract_with_summary(
-        self, url: str, summary_length: int = 200
-    ) -> Optional[StructuredData]:
+    def extract_with_summary(self, url: str, summary_length: int = 200) -> Optional[StructuredData]:
         """Extract data and add a brief summary."""
         result = self.extract(url)
 
@@ -142,9 +138,7 @@ class DataExtractor:
 
         return result
 
-    def _calculate_confidence(
-        self, content: ExtractedContent, structured_info: dict
-    ) -> float:
+    def _calculate_confidence(self, content: ExtractedContent, structured_info: dict) -> float:
         """Calculate a confidence score for the extraction."""
         score = 0.0
 
@@ -166,9 +160,7 @@ class DataExtractor:
             score += 0.2
 
             expected_fields = ["summary", "topics", "entities", "category"]
-            found_fields = sum(
-                1 for field in expected_fields if field in structured_info
-            )
+            found_fields = sum(1 for field in expected_fields if field in structured_info)
             score += (found_fields / len(expected_fields)) * 0.1
 
         return min(score, 1.0)

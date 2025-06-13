@@ -13,12 +13,8 @@ class ExtractedContent(BaseModel):
     title: Optional[str] = Field(None, description="Page title")
     description: Optional[str] = Field(None, description="Page description or summary")
     main_content: str = Field(..., description="Main textual content of the page")
-    links: List[str] = Field(
-        default_factory=list, description="Important links found on the page"
-    )
-    metadata: Dict[str, Any] = Field(
-        default_factory=dict, description="Additional metadata"
-    )
+    links: List[str] = Field(default_factory=list, description="Important links found on the page")
+    metadata: Dict[str, Any] = Field(default_factory=dict, description="Additional metadata")
 
 
 class StructuredData(BaseModel):
@@ -30,9 +26,7 @@ class StructuredData(BaseModel):
     structured_info: Dict[str, Any] = Field(
         default_factory=dict, description="LLM-structured information"
     )
-    confidence: Optional[float] = Field(
-        None, description="Confidence score of extraction"
-    )
+    confidence: Optional[float] = Field(None, description="Confidence score of extraction")
 
 
 class ExtractionConfig(BaseModel):
@@ -41,8 +35,6 @@ class ExtractionConfig(BaseModel):
     model_config = {"protected_namespaces": ()}
 
     model_name: str = Field(default="gemma3:27b", description="Ollama model to use")
-    max_content_length: int = Field(
-        default=5000, description="Maximum content length to process"
-    )
+    max_content_length: int = Field(default=5000, description="Maximum content length to process")
     extract_links: bool = Field(default=True, description="Whether to extract links")
     custom_prompt: Optional[str] = Field(None, description="Custom extraction prompt")

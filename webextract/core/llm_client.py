@@ -29,9 +29,7 @@ class OllamaClient:
             logger.error(f"Failed to check model availability: {e}")
             return False
 
-    def generate_structured_data(
-        self, content: str, custom_prompt: str = None
-    ) -> Dict[str, Any]:
+    def generate_structured_data(self, content: str, custom_prompt: str = None) -> Dict[str, Any]:
         """Generate structured data from content using LLM with retry logic."""
 
         prompt = custom_prompt or self._get_default_prompt()
@@ -52,9 +50,7 @@ Please respond with valid JSON only.
 
         for attempt in range(settings.LLM_RETRY_ATTEMPTS):
             try:
-                logger.info(
-                    f"LLM generation attempt {attempt + 1}/{settings.LLM_RETRY_ATTEMPTS}"
-                )
+                logger.info(f"LLM generation attempt {attempt + 1}/{settings.LLM_RETRY_ATTEMPTS}")
 
                 response = self.client.generate(
                     model=self.model_name,
@@ -74,9 +70,7 @@ Please respond with valid JSON only.
                     if self._validate_structured_data(structured_data):
                         return structured_data
                     else:
-                        logger.warning(
-                            f"Invalid structured data format (attempt {attempt + 1})"
-                        )
+                        logger.warning(f"Invalid structured data format (attempt {attempt + 1})")
                         if attempt < settings.LLM_RETRY_ATTEMPTS - 1:
                             continue
 
@@ -142,9 +136,7 @@ Return the information as a JSON object with these fields:
 - key_points: list of key takeaways
 """
 
-    def _extract_json_from_response(
-        self, response_text: str
-    ) -> Optional[Dict[str, Any]]:
+    def _extract_json_from_response(self, response_text: str) -> Optional[Dict[str, Any]]:
         """Extract JSON from LLM response with improved parsing."""
         try:
             # Clean the response
