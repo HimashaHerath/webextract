@@ -4,7 +4,7 @@ import asyncio
 from unittest.mock import Mock, patch
 
 import webextract
-from webextract import Extractor
+from webextract import WebExtractor
 
 
 def test_package_imports():
@@ -55,21 +55,21 @@ def test_author():
 
 
 def test_extractor_initialization():
-    """Test that Extractor can be initialized."""
-    extractor = Extractor()
+    """Test that WebExtractor can be initialized."""
+    extractor = WebExtractor()
     assert extractor is not None
 
 
 def test_extractor_has_required_methods():
-    """Test that Extractor has the required methods."""
-    extractor = Extractor()
+    """Test that WebExtractor has the required methods."""
+    extractor = WebExtractor()
     assert hasattr(extractor, "extract")
-    assert hasattr(extractor, "extract_batch")
+    assert hasattr(extractor, "test_connection")
 
 
 async def async_test_basic_functionality():
     """Basic async test - placeholder for future async tests."""
-    extractor = Extractor()
+    extractor = WebExtractor()
     # This is a placeholder - actual web scraping tests would require
     # either mocked responses or actual test URLs
     assert extractor is not None
@@ -82,8 +82,8 @@ def test_basic_functionality():
 
 def test_import_structure():
     """Test that key classes can be imported."""
-    from webextract import Extractor
-    from webextract.formats import Format
+    from webextract import WebExtractor
+    from webextract.core.models import ExtractedContent
 
-    assert Extractor is not None
-    assert Format is not None
+    assert WebExtractor is not None
+    assert ExtractedContent is not None
