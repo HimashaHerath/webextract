@@ -2,8 +2,9 @@
 
 import logging
 from datetime import datetime
-from typing import Optional
+from typing import Optional, Union
 
+from ..config.settings import WebExtractConfig
 from .llm_client import OllamaClient
 from .models import ExtractedContent, ExtractionConfig, StructuredData
 from .scraper import WebScraper
@@ -14,8 +15,22 @@ logger = logging.getLogger(__name__)
 class DataExtractor:
     """Main class for extracting structured data from web pages."""
 
-    def __init__(self, config: ExtractionConfig = None):
-        self.config = config or ExtractionConfig()
+    def __init__(self, config: Union[ExtractionConfig, WebExtractConfig] = None):
+        if config is None:
+            self.config = ExtractionConfig()
+            self.web_config = None
+        elif isinstance(config, WebExtractConfig):
+            self.web_config = config
+            # Convert WebExtractConfig to ExtractionConfig for backward compatibility
+            self.config = ExtractionConfig(
+                model_name=config.llm.model_name,
+                max_content_length=config.scraping.max_content_length,
+                custom_prompt=config.llm.custom_prompt,
+            )
+        else:
+            self.config = config
+            self.web_config = None
+
         self.llm_client = OllamaClient(model_name=self.config.model_name)
 
     def extract(self, url: str) -> Optional[StructuredData]:
