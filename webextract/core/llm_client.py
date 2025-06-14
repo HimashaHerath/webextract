@@ -2,7 +2,8 @@
 
 import json
 import logging
-from typing import Any, Dict, Optional
+import re
+from typing import Any, Dict, List, Optional, Union
 
 import ollama
 
@@ -29,24 +30,38 @@ class OllamaClient:
             logger.error(f"Failed to check model availability: {e}")
             return False
 
-    def generate_structured_data(self, content: str, custom_prompt: str = None) -> Dict[str, Any]:
-        """Generate structured data from content using LLM with retry logic."""
+    def generate_structured_data(
+        self, content: str, custom_prompt: str = None, schema: Dict[str, Any] = None
+    ) -> Dict[str, Any]:
+        """Generate structured data from content using LLM with improved JSON handling."""
+        
+        # Use schema if provided, otherwise use default
+        if schema:
+            prompt = self._create_schema_prompt(schema)
+        else:
+            prompt = custom_prompt or self._get_improved_prompt()
 
-        prompt = custom_prompt or self._get_default_prompt()
+        # Truncate content if needed
+        truncated_content = content[:self.max_content_length]
+        if len(content) > self.max_content_length:
+            logger.info(f"Content truncated from {len(content)} to {self.max_content_length} characters")
 
-        full_prompt = f"""
-Content to analyze:
-{content[:self.max_content_length]}
+        full_prompt = f"""Analyze the following content and return ONLY a valid JSON object.
 
+CONTENT TO ANALYZE:
+{truncated_content}
+
+EXTRACTION INSTRUCTIONS:
 {prompt}
 
-IMPORTANT: Respond with ONLY the JSON object. Do not include any explanatory text, markdown formatting, or code blocks. Start your response with {{ and end with }}.
-"""
-
-        if len(content) > self.max_content_length:
-            logger.info(
-                f"Content truncated from {len(content)} to {self.max_content_length} characters"
-            )
+CRITICAL RULES:
+1. Return ONLY the JSON object - no explanatory text before or after
+2. Start with {{ and end with }}
+3. Use double quotes for ALL strings (no single quotes)
+4. Ensure all required fields are present
+5. Use empty arrays [] for missing list data
+6. Use empty strings "" for missing text data
+7. Escape any quotes inside string values with \\"""
 
         for attempt in range(settings.LLM_RETRY_ATTEMPTS):
             try:
@@ -58,242 +73,216 @@ IMPORTANT: Respond with ONLY the JSON object. Do not include any explanatory tex
                     options={
                         "temperature": settings.LLM_TEMPERATURE,
                         "num_predict": settings.MAX_TOKENS,
+                        "format": "json",  # Request JSON format if model supports it
                     },
                 )
 
                 response_text = response.get("response", "").strip()
                 logger.debug(f"LLM response length: {len(response_text)} characters")
-                logger.debug(f"LLM response preview: {response_text[:200]}...")
 
-                structured_data = self._extract_json_from_response(response_text)
-                if structured_data:
-                    # Validate the structure has expected fields
-                    if self._validate_structured_data(structured_data):
-                        logger.info(f"Successfully extracted valid structured data on attempt {attempt + 1}")
-                        return structured_data
-                    else:
-                        logger.warning(f"Invalid structured data format (attempt {attempt + 1})")
-                        if attempt < settings.LLM_RETRY_ATTEMPTS - 1:
-                            continue
+                # Try to parse the response
+                result = self._parse_json_response(response_text)
+                
+                if result and self._validate_extraction_result(result, schema):
+                    logger.info(f"Successfully extracted valid structured data on attempt {attempt + 1}")
+                    return result
 
-                # If JSON extraction fails, try to fix common issues
-                fixed_response = self._fix_json_response(response_text)
-                if fixed_response and self._validate_structured_data(fixed_response):
-                    logger.info(f"Successfully fixed and validated JSON on attempt {attempt + 1}")
-                    return fixed_response
-
-                # Last resort - return a structured error response
-                if attempt == settings.LLM_RETRY_ATTEMPTS - 1:
-                    logger.warning("All JSON parsing attempts failed, creating fallback response")
-                    return self._create_fallback_response(response_text)
+                # If validation failed, try once more with stricter prompt
+                if attempt == 0:
+                    logger.warning("First attempt failed validation, trying with stricter prompt")
+                    continue
 
             except Exception as e:
                 logger.error(f"LLM generation failed (attempt {attempt + 1}): {e}")
                 if attempt == settings.LLM_RETRY_ATTEMPTS - 1:
-                    return self._create_fallback_response(f"Error: {str(e)}")
+                    return self._create_safe_fallback(content[:200])
 
-        return self._create_fallback_response("All LLM attempts failed")
+        return self._create_safe_fallback(content[:200])
 
-    def _create_fallback_response(self, error_info: str) -> Dict[str, Any]:
-        """Create a fallback response when JSON parsing fails."""
-        # Try to extract some basic information from the error_info if it looks like content
-        summary = error_info
-        if len(error_info) > 200 and not error_info.startswith("Error:"):
-            # If it's actual content, use first 200 chars as summary
-            summary = error_info[:200] + "..."
-        elif error_info.startswith("Error:"):
-            summary = "Failed to analyze content due to processing error"
+    def _parse_json_response(self, response_text: str) -> Optional[Dict[str, Any]]:
+        """Parse JSON from LLM response with multiple strategies."""
+        if not response_text:
+            return None
+
+        # Strategy 1: Direct parsing
+        try:
+            return json.loads(response_text)
+        except json.JSONDecodeError:
+            pass
+
+        # Strategy 2: Extract JSON from text
+        json_match = re.search(r'\{[^{}]*\{[^{}]*\}[^{}]*\}|\{[^{}]*\}', response_text, re.DOTALL)
+        if json_match:
+            try:
+                return json.loads(json_match.group())
+            except json.JSONDecodeError:
+                pass
+
+        # Strategy 3: Clean and parse
+        cleaned = self._clean_json_text(response_text)
+        if cleaned:
+            try:
+                return json.loads(cleaned)
+            except json.JSONDecodeError as e:
+                logger.warning(f"JSON decode error after cleaning: {e}")
+
+        return None
+
+    def _clean_json_text(self, text: str) -> Optional[str]:
+        """Clean potential JSON text with safer approach."""
+        # Remove markdown code blocks
+        text = re.sub(r'```(?:json)?\s*\n?', '', text)
+        text = re.sub(r'\n?```', '', text)
+        text = text.strip()
+
+        # Find JSON boundaries
+        start = text.find('{')
+        end = text.rfind('}')
         
+        if start == -1 or end == -1 or end <= start:
+            return None
+
+        json_text = text[start:end + 1]
+
+        # Safe replacements
+        # Fix common LLM mistakes
+        json_text = re.sub(r',\s*}', '}', json_text)  # Remove trailing commas
+        json_text = re.sub(r',\s*]', ']', json_text)  # Remove trailing commas in arrays
+        
+        # Fix newlines and tabs in strings (but not between JSON elements)
+        def fix_string_newlines(match):
+            string_content = match.group(1)
+            string_content = string_content.replace('\n', '\\n').replace('\r', '\\r').replace('\t', '\\t')
+            return f'"{string_content}"'
+        
+        # This regex matches strings but avoids the complexities of escaped quotes
+        json_text = re.sub(r'"([^"\\]*(?:\\.[^"\\]*)*)"', fix_string_newlines, json_text)
+
+        return json_text
+
+    def _get_improved_prompt(self) -> str:
+        """Get improved default prompt for better JSON generation."""
+        return """Extract the following information from the content:
+
+{
+  "summary": "A clear, concise summary of the main points (required, 2-3 sentences)",
+  "topics": ["array of main topics or themes discussed"],
+  "category": "primary category (technology/business/news/education/entertainment/other)",
+  "sentiment": "overall tone (positive/negative/neutral)",
+  "entities": {
+    "people": ["array of person names mentioned"],
+    "organizations": ["array of organization/company names"],
+    "locations": ["array of locations/places mentioned"]
+  },
+  "key_facts": ["array of important facts or claims"],
+  "important_dates": ["array of dates mentioned with context"],
+  "statistics": ["array of numbers, percentages, or metrics mentioned"]
+}
+
+Return this EXACT structure with these EXACT field names.
+ALL fields must be present. Use empty arrays [] if no data found."""
+
+    def _create_schema_prompt(self, schema: Dict[str, Any]) -> str:
+        """Create a prompt from a provided schema."""
+        return f"""Extract information according to this schema:
+
+{json.dumps(schema, indent=2)}
+
+Return data matching this EXACT structure with ALL fields present.
+Use appropriate empty values (empty strings, empty arrays) for missing data."""
+
+    def _validate_extraction_result(
+        self, result: Dict[str, Any], schema: Optional[Dict[str, Any]] = None
+    ) -> bool:
+        """Validate extraction result against schema or default requirements."""
+        if not isinstance(result, dict):
+            return False
+
+        if schema:
+            return self._validate_against_schema(result, schema)
+
+        # Default validation
+        required_fields = ["summary"]
+        if not all(field in result and result[field] for field in required_fields):
+            return False
+
+        # Check for expected structure
+        expected_structure = {
+            "summary": str,
+            "topics": list,
+            "category": str,
+            "sentiment": str,
+            "entities": dict,
+            "key_facts": list,
+            "important_dates": list,
+            "statistics": list
+        }
+
+        for field, expected_type in expected_structure.items():
+            if field in result:
+                if not isinstance(result[field], expected_type):
+                    # Try to fix common type mismatches
+                    if expected_type == list and isinstance(result[field], str):
+                        result[field] = [result[field]] if result[field] else []
+                    elif expected_type == str and result[field] is None:
+                        result[field] = ""
+                    else:
+                        logger.warning(f"Field {field} has wrong type: {type(result[field])}")
+
+        return True
+
+    def _validate_against_schema(self, result: Dict[str, Any], schema: Dict[str, Any]) -> bool:
+        """Validate result against provided schema."""
+        for key, value in schema.items():
+            if key not in result:
+                logger.warning(f"Missing required field: {key}")
+                return False
+            
+            # Basic type checking based on schema value
+            if isinstance(value, str):
+                if not isinstance(result[key], str):
+                    result[key] = str(result[key]) if result[key] is not None else ""
+            elif isinstance(value, list):
+                if not isinstance(result[key], list):
+                    result[key] = [result[key]] if result[key] else []
+            elif isinstance(value, dict):
+                if not isinstance(result[key], dict):
+                    result[key] = {}
+
+        return True
+
+    def _create_safe_fallback(self, content_preview: str) -> Dict[str, Any]:
+        """Create a safe fallback response with proper structure."""
         return {
-            "summary": summary,
+            "summary": f"Content extraction failed. Preview: {content_preview}...",
             "topics": [],
+            "category": "unknown",
+            "sentiment": "neutral",
             "entities": {
                 "people": [],
                 "organizations": [],
                 "locations": []
             },
-            "category": "unknown",
-            "sentiment": "neutral",
-            "key_points": [],
+            "key_facts": [],
             "important_dates": [],
-            "numbers": [],
-            "error": error_info if error_info.startswith("Error:") else None
+            "statistics": [],
+            "extraction_error": True
         }
 
-    def _get_default_prompt(self) -> str:
-        """Get the default prompt for content analysis."""
-        return """
-You are a JSON extraction assistant. Analyze the web content and return ONLY valid JSON.
-
-Extract these fields and return as JSON:
-{
-  "summary": "Brief summary of the content (required)",
-  "topics": ["topic1", "topic2"],
-  "category": "content category (e.g., technology, news, tutorial)",
-  "sentiment": "positive, negative, or neutral",
-  "entities": {
-    "people": ["person1", "person2"],
-    "organizations": ["org1", "org2"],
-    "locations": ["place1", "place2"]
-  },
-  "important_dates": ["date1", "date2"],
-  "numbers": ["stat1", "stat2"],
-  "key_points": ["point1", "point2"]
-}
-
-Rules:
-- Return ONLY the JSON object, no other text
-- All fields must be present, use empty arrays/objects if no data
-- Use double quotes for all strings
-- Summary field is required and cannot be empty"""
-
-    def _extract_json_from_response(self, response_text: str) -> Optional[Dict[str, Any]]:
-        """Extract JSON from LLM response with improved parsing."""
-        try:
-            # Clean the response
-            cleaned_text = response_text.strip()
-
-            # Remove markdown formatting if present
-            if cleaned_text.startswith("```json"):
-                cleaned_text = cleaned_text[7:]
-            elif cleaned_text.startswith("```"):
-                cleaned_text = cleaned_text[3:]
-            if cleaned_text.endswith("```"):
-                cleaned_text = cleaned_text[:-3]
-
-            cleaned_text = cleaned_text.strip()
-
-            # Remove any text before the first { and after the last }
-            start_idx = cleaned_text.find("{")
-            end_idx = cleaned_text.rfind("}") + 1
-
-            if start_idx != -1 and end_idx != 0 and end_idx > start_idx:
-                json_str = cleaned_text[start_idx:end_idx]
-                
-                # Try to parse the JSON
-                try:
-                    return json.loads(json_str)
-                except json.JSONDecodeError:
-                    # Try fixing common issues first
-                    fixed_json = self._fix_json_string(json_str)
-                    if fixed_json:
-                        return json.loads(fixed_json)
-                    raise
-
-            # If no JSON braces found, try to parse the entire response
-            return json.loads(cleaned_text)
-
-        except json.JSONDecodeError as e:
-            logger.warning(f"Failed to parse JSON from LLM response: {e}")
-            logger.debug(f"Response text: {response_text[:300]}...")
-            return None
-
-    def _validate_structured_data(self, data: Dict[str, Any]) -> bool:
-        """Validate that structured data has expected fields."""
-        if not isinstance(data, dict):
-            logger.warning("Structured data is not a dictionary")
-            return False
-            
-        required_fields = ["summary"]
-        recommended_fields = ["topics", "category", "sentiment"]
-
-        # Check if it has at least a summary and it's not empty
-        if not any(field in data and data[field] for field in required_fields):
-            logger.warning("Structured data missing required fields or required fields are empty")
-            return False
-
-        # Check if it has some recommended fields
-        if not any(field in data for field in recommended_fields):
-            logger.warning("Structured data missing recommended fields")
-            # Still valid, just warn
-
-        # Ensure all expected fields exist with proper types
-        self._ensure_field_types(data)
-
-        return True
-
-    def _ensure_field_types(self, data: Dict[str, Any]) -> None:
-        """Ensure all fields have the correct types."""
-        # Ensure lists exist and are actually lists
-        list_fields = ["topics", "key_points", "important_dates", "numbers"]
-        for field in list_fields:
-            if field not in data:
-                data[field] = []
-            elif not isinstance(data[field], list):
-                # Convert to list if it's a string or other type
-                if isinstance(data[field], str):
-                    data[field] = [data[field]] if data[field] else []
-                else:
-                    data[field] = []
-
-        # Ensure entities is a dict
-        if "entities" not in data:
-            data["entities"] = {}
-        elif not isinstance(data["entities"], dict):
-            data["entities"] = {}
-
-        # Ensure string fields are strings
-        string_fields = ["summary", "category", "sentiment"]
-        for field in string_fields:
-            if field not in data:
-                data[field] = ""
-            elif not isinstance(data[field], str):
-                data[field] = str(data[field]) if data[field] is not None else ""
-
-    def _fix_json_string(self, json_str: str) -> Optional[str]:
-        """Apply common JSON fixes to a JSON string."""
-        try:
-            import re
-            
-            fixed = json_str
-            
-            # Fix 1: Remove trailing commas before } and ]
-            fixed = re.sub(r',(\s*[}\]])', r'\1', fixed)
-            
-            # Fix 2: Fix single quotes to double quotes (but be careful not to break contractions)
-            # This is a simple approach - replace single quotes that are likely JSON delimiters
-            fixed = re.sub(r"'(\w+)':", r'"\1":', fixed)  # Keys
-            fixed = re.sub(r":\s*'([^']*)'", r': "\1"', fixed)  # String values
-            fixed = re.sub(r'\[\s*\'([^\']*)\'\s*\]', r'["\1"]', fixed)  # Arrays with single quotes
-            
-            # Fix 3: Escape unescaped quotes in strings
-            # This is tricky, so we'll do a simple fix for common cases
-            fixed = re.sub(r'(?<!\\)"(?=[^,}\]:]*[,}\]:]*)', r'\\"', fixed)
-            
-            # Fix 4: Fix common control characters
-            fixed = fixed.replace('\n', '\\n').replace('\r', '\\r').replace('\t', '\\t')
-            
-            # Fix 5: Remove any non-printable characters except necessary whitespace
-            fixed = re.sub(r'[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]', '', fixed)
-            
-            return fixed
-            
-        except Exception as e:
-            logger.debug(f"Error in _fix_json_string: {e}")
-            return None
-
-    def _fix_json_response(self, response_text: str) -> Optional[Dict[str, Any]]:
-        """Attempt to fix common JSON formatting issues."""
-        try:
-            # Apply fixes and try parsing again
-            fixed_text = self._fix_json_string(response_text)
-            if fixed_text:
-                return self._extract_json_from_response(fixed_text)
-            return None
-
-        except Exception as e:
-            logger.warning(f"Failed to fix JSON response: {e}")
-            return None
+    def extract_with_schema(
+        self, content: str, schema: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Extract data according to a specific schema."""
+        return self.generate_structured_data(content, schema=schema)
 
     def summarize_content(self, content: str, max_length: int = 200) -> str:
         """Generate a brief summary of the content."""
-        prompt = f"""
-Please provide a concise summary of the following content in no more than {max_length} characters:
+        prompt = f"""Provide a clear, concise summary of this content in no more than {max_length} characters.
+Focus on the main points and key takeaways.
 
-{content}
+Content: {content[:2000]}
 
-Summary:
-"""
+Summary (max {max_length} chars):"""
 
         try:
             response = self.client.generate(
@@ -301,18 +290,19 @@ Summary:
                 prompt=prompt,
                 options={
                     "temperature": 0.3,
-                    "num_predict": max_length // 3,  # Rough token estimate
+                    "num_predict": max_length // 3,
                 },
             )
 
             summary = response["response"].strip()
-
+            
             # Ensure summary doesn't exceed max length
             if len(summary) > max_length:
-                summary = summary[: max_length - 3] + "..."
+                summary = summary[:max_length - 3].rsplit(' ', 1)[0] + "..."
 
             return summary
 
         except Exception as e:
             logger.error(f"Failed to generate summary: {e}")
-            return f"Summary generation failed: {str(e)}"
+            preview = content[:max_length - 3] + "..." if len(content) > max_length else content
+            return preview
