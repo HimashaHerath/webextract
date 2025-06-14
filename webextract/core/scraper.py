@@ -166,9 +166,7 @@ class WebScraper:
 
                 # Navigate with appropriate timeout
                 timeout = settings.REQUEST_TIMEOUT * 1000
-                response = page.goto(
-                    url, wait_until="domcontentloaded", timeout=timeout
-                )
+                response = page.goto(url, wait_until="domcontentloaded", timeout=timeout)
 
                 if not response:
                     logger.warning(f"No response from {url}")

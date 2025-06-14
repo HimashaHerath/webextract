@@ -15,9 +15,7 @@ class ExtractedContent(BaseModel):
     description: Optional[str] = Field(None, description="Page meta description")
     main_content: str = Field(..., description="Main textual content")
     links: List[str] = Field(default_factory=list, description="Important links")
-    metadata: Dict[str, Any] = Field(
-        default_factory=dict, description="Additional metadata"
-    )
+    metadata: Dict[str, Any] = Field(default_factory=dict, description="Additional metadata")
 
     @field_validator("main_content")
     def validate_main_content(cls, v):
@@ -58,9 +56,7 @@ class EntityInfo(BaseModel):
     """Model for extracted entities."""
 
     people: List[str] = Field(default_factory=list, description="Person names")
-    organizations: List[str] = Field(
-        default_factory=list, description="Organization names"
-    )
+    organizations: List[str] = Field(default_factory=list, description="Organization names")
     locations: List[str] = Field(default_factory=list, description="Location names")
 
     @property
@@ -81,19 +77,11 @@ class StructuredInfo(BaseModel):
     topics: List[str] = Field(default_factory=list, description="Main topics")
     category: str = Field(default="unknown", description="Content category")
     sentiment: str = Field(default="neutral", description="Overall sentiment")
-    entities: EntityInfo = Field(
-        default_factory=EntityInfo, description="Named entities"
-    )
+    entities: EntityInfo = Field(default_factory=EntityInfo, description="Named entities")
     key_facts: List[str] = Field(default_factory=list, description="Key facts")
-    important_dates: List[str] = Field(
-        default_factory=list, description="Important dates"
-    )
-    statistics: List[str] = Field(
-        default_factory=list, description="Statistics and numbers"
-    )
-    extraction_error: bool = Field(
-        default=False, description="Whether extraction had errors"
-    )
+    important_dates: List[str] = Field(default_factory=list, description="Important dates")
+    statistics: List[str] = Field(default_factory=list, description="Statistics and numbers")
+    extraction_error: bool = Field(default=False, description="Whether extraction had errors")
 
     @field_validator("sentiment")
     def validate_sentiment(cls, v):
@@ -137,9 +125,7 @@ class StructuredData(BaseModel):
     structured_info: Union[StructuredInfo, Dict[str, Any]] = Field(
         ..., description="LLM-processed information"
     )
-    confidence: float = Field(
-        default=0.0, ge=0.0, le=1.0, description="Extraction confidence"
-    )
+    confidence: float = Field(default=0.0, ge=0.0, le=1.0, description="Extraction confidence")
 
     @field_validator("extracted_at")
     def validate_timestamp(cls, v):

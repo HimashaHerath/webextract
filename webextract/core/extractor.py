@@ -66,9 +66,7 @@ class DataExtractor:
         # Check model availability
         if not self.llm_client.is_model_available():
             logger.error(f"Model {self.config.model_name} is not available")
-            return self._create_error_result(
-                url, f"Model {self.config.model_name} not available"
-            )
+            return self._create_error_result(url, f"Model {self.config.model_name} not available")
 
         # Extract content
         extracted_content = self._scrape_content(url)
@@ -120,8 +118,7 @@ class DataExtractor:
 
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             future_to_index = {
-                executor.submit(self.extract, url, schema): i
-                for i, url in enumerate(urls)
+                executor.submit(self.extract, url, schema): i for i, url in enumerate(urls)
             }
 
             for future in as_completed(future_to_index):
@@ -252,9 +249,7 @@ class DataExtractor:
             score += 0.05
 
         # Structured data quality
-        if not structured_info.get("error") and not structured_info.get(
-            "extraction_error"
-        ):
+        if not structured_info.get("error") and not structured_info.get("extraction_error"):
             score += 0.2
 
             # Check for key fields

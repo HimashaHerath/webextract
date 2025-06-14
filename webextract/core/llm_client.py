@@ -67,9 +67,7 @@ CRITICAL RULES:
 
         for attempt in range(settings.LLM_RETRY_ATTEMPTS):
             try:
-                logger.info(
-                    f"LLM generation attempt {attempt + 1}/{settings.LLM_RETRY_ATTEMPTS}"
-                )
+                logger.info(f"LLM generation attempt {attempt + 1}/{settings.LLM_RETRY_ATTEMPTS}")
 
                 response = self.client.generate(
                     model=self.model_name,
@@ -95,9 +93,7 @@ CRITICAL RULES:
 
                 # If validation failed, try once more with stricter prompt
                 if attempt == 0:
-                    logger.warning(
-                        "First attempt failed validation, trying with stricter prompt"
-                    )
+                    logger.warning("First attempt failed validation, trying with stricter prompt")
                     continue
 
             except Exception as e:
@@ -119,9 +115,7 @@ CRITICAL RULES:
             pass
 
         # Strategy 2: Extract JSON from text
-        json_match = re.search(
-            r"\{[^{}]*\{[^{}]*\}[^{}]*\}|\{[^{}]*\}", response_text, re.DOTALL
-        )
+        json_match = re.search(r"\{[^{}]*\{[^{}]*\}[^{}]*\}|\{[^{}]*\}", response_text, re.DOTALL)
         if json_match:
             try:
                 return json.loads(json_match.group())
@@ -163,16 +157,12 @@ CRITICAL RULES:
         def fix_string_newlines(match):
             string_content = match.group(1)
             string_content = (
-                string_content.replace("\n", "\\n")
-                .replace("\r", "\\r")
-                .replace("\t", "\\t")
+                string_content.replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t")
             )
             return f'"{string_content}"'
 
         # This regex matches strings but avoids the complexities of escaped quotes
-        json_text = re.sub(
-            r'"([^"\\]*(?:\\.[^"\\]*)*)"', fix_string_newlines, json_text
-        )
+        json_text = re.sub(r'"([^"\\]*(?:\\.[^"\\]*)*)"', fix_string_newlines, json_text)
 
         return json_text
 
@@ -243,15 +233,11 @@ Use appropriate empty values (empty strings, empty arrays) for missing data."""
                     elif expected_type == str and result[field] is None:
                         result[field] = ""
                     else:
-                        logger.warning(
-                            f"Field {field} has wrong type: {type(result[field])}"
-                        )
+                        logger.warning(f"Field {field} has wrong type: {type(result[field])}")
 
         return True
 
-    def _validate_against_schema(
-        self, result: Dict[str, Any], schema: Dict[str, Any]
-    ) -> bool:
+    def _validate_against_schema(self, result: Dict[str, Any], schema: Dict[str, Any]) -> bool:
         """Validate result against provided schema."""
         for key, value in schema.items():
             if key not in result:
@@ -285,9 +271,7 @@ Use appropriate empty values (empty strings, empty arrays) for missing data."""
             "extraction_error": True,
         }
 
-    def extract_with_schema(
-        self, content: str, schema: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    def extract_with_schema(self, content: str, schema: Dict[str, Any]) -> Dict[str, Any]:
         """Extract data according to a specific schema."""
         return self.generate_structured_data(content, schema=schema)
 
@@ -320,9 +304,5 @@ Summary (max {max_length} chars):"""
 
         except Exception as e:
             logger.error(f"Failed to generate summary: {e}")
-            preview = (
-                content[: max_length - 3] + "..."
-                if len(content) > max_length
-                else content
-            )
+            preview = content[: max_length - 3] + "..." if len(content) > max_length else content
             return preview
