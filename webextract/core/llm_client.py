@@ -3,7 +3,7 @@
 import json
 import logging
 import re
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, Optional
 
 import ollama
 
@@ -173,7 +173,8 @@ CRITICAL RULES:
 {
   "summary": "A clear, concise summary of the main points (required, 2-3 sentences)",
   "topics": ["array of main topics or themes discussed"],
-  "category": "primary category (technology/business/news/education/entertainment/other)",
+  "category": "primary category (technology/business/news/education/"
+              "entertainment/other)",
   "sentiment": "overall tone (positive/negative/neutral)",
   "entities": {
     "people": ["array of person names mentioned"],
@@ -277,7 +278,8 @@ Use appropriate empty values (empty strings, empty arrays) for missing data."""
 
     def summarize_content(self, content: str, max_length: int = 200) -> str:
         """Generate a brief summary of the content."""
-        prompt = f"""Provide a clear, concise summary of this content in no more than {max_length} characters.
+        prompt = f"""Provide a clear, concise summary of this content in no more than \
+{max_length} characters.
 Focus on the main points and key takeaways.
 
 Content: {content[:2000]}

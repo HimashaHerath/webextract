@@ -3,7 +3,7 @@
 import logging
 import re
 import time
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Dict, List, Optional
 from urllib.parse import urljoin, urlparse
 
 from bs4 import BeautifulSoup, NavigableString, Tag
@@ -69,10 +69,10 @@ class WebScraper:
                 Object.defineProperty(navigator, 'webdriver', {
                     get: () => undefined
                 });
-                
+
                 // Add chrome object
                 window.chrome = { runtime: {} };
-                
+
                 // Fix permissions
                 const originalQuery = window.navigator.permissions.query;
                 window.navigator.permissions.query = (parameters) => (
@@ -192,7 +192,7 @@ class WebScraper:
                         "document.body && document.body.innerText.length > 100",
                         timeout=5000,
                     )
-                except:
+                except Exception:
                     # Fallback wait
                     page.wait_for_timeout(2000)
 
@@ -217,7 +217,7 @@ class WebScraper:
                 if page:
                     try:
                         page.close()
-                    except:
+                    except Exception:
                         pass
 
         return None
@@ -595,7 +595,7 @@ class WebScraper:
 
                 schema_data = json.loads(json_ld.string)
                 metadata["schema_org"] = schema_data
-            except:
+            except Exception:
                 pass
 
         # Canonical URL

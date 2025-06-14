@@ -36,7 +36,7 @@ class ExtractedContent(BaseModel):
                     parsed = urlparse(link)
                     if parsed.scheme and parsed.netloc:
                         valid_links.append(link)
-                except:
+                except Exception:
                     pass
             return valid_links
         return v
@@ -134,7 +134,7 @@ class StructuredData(BaseModel):
             # Try to parse it to ensure it's valid
             datetime.fromisoformat(v.replace("Z", "+00:00"))
             return v
-        except:
+        except Exception:
             # If invalid, use current time
             return datetime.now().isoformat()
 
@@ -148,7 +148,7 @@ class StructuredData(BaseModel):
             if not parsed.scheme or not parsed.netloc:
                 raise ValueError("Invalid URL format")
             return v
-        except:
+        except Exception:
             raise ValueError(f"Invalid URL: {v}")
 
     @property
