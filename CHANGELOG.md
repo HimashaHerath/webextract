@@ -2,6 +2,27 @@
 
 All notable changes to LLM WebExtract will be documented in this file.
 
+## [1.0.4] - 2024-06-14
+
+### Fixed
+- Fixed JSON parsing errors in LLM responses
+- Improved structured data validation and type checking
+- Enhanced error handling with better fallback responses
+- Resolved "Structured data missing required fields" warnings
+- Fixed single quotes to double quotes conversion in JSON
+- Added robust JSON string repair mechanisms
+
+### Added
+- Comprehensive example files for different use cases
+- Enhanced LLM prompts for more consistent JSON output
+- Better field type validation and normalization
+- Improved debugging and logging for JSON parsing issues
+
+### Changed
+- Enhanced default prompt template for clearer JSON instructions
+- Improved validation logic for structured data fields
+- More robust fallback response generation
+
 ## [1.0.0] - 2024-12-13
 
 ### Added

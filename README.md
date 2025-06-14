@@ -199,6 +199,25 @@ except ExtractionError as e:
 
 Found a bug? Want to add a feature? PRs are welcome!
 
+**For Contributors:**
+- 📖 Read our [Development Guide](DEVELOPMENT.md) for commit conventions, versioning, and release processes
+- 🐛 Report bugs by opening an issue with detailed reproduction steps
+- 💡 Suggest features by opening a discussion or issue
+- 🔧 Submit PRs following our coding standards and commit message format
+
+**Quick Start for Contributors:**
+```bash
+# Fork and clone the repo
+git clone https://github.com/yourusername/llm-scraper.git
+cd llm-scraper
+
+# Install in development mode
+pip install -e ".[dev]"
+
+# Run tests and quality checks
+python -m pytest && python -m black --check . && python -m flake8 --config .flake8
+```
+
 1. Fork the repo
 2. Create a feature branch
 3. Make your changes
