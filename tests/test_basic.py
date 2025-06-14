@@ -45,7 +45,7 @@ def test_quick_extract(mock_extract):
 def test_version():
     """Test package version is available."""
     assert hasattr(webextract, "__version__")
-    assert webextract.__version__ == "1.1.0"
+    assert webextract.__version__ == "1.1.1"
 
 
 def test_author():
