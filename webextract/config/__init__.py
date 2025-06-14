@@ -3,7 +3,6 @@
 from .profiles import ConfigProfiles
 from .settings import (
     ConfigBuilder,
-    FilterConfig,
     LLMConfig,
     ScrapingConfig,
     WebExtractConfig,
@@ -15,7 +14,6 @@ __all__ = [
     "ConfigBuilder",
     "ScrapingConfig",
     "LLMConfig",
-    "FilterConfig",
     "ConfigProfiles",
     "settings",
 ]

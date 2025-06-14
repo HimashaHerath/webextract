@@ -35,12 +35,18 @@ def extract(
     output_format: str = typer.Option(
         "json", "--format", "-f", help="Output format (json, pretty)"
     ),
-    output_file: Optional[str] = typer.Option(None, "--output", "-o", help="Output file path"),
-    model: str = typer.Option(settings.DEFAULT_MODEL, "--model", "-m", help="LLM model to use"),
+    output_file: Optional[str] = typer.Option(
+        None, "--output", "-o", help="Output file path"
+    ),
+    model: str = typer.Option(
+        settings.DEFAULT_MODEL, "--model", "-m", help="LLM model to use"
+    ),
     max_content: int = typer.Option(
         settings.MAX_CONTENT_LENGTH, "--max-content", help="Max content length"
     ),
-    summary: bool = typer.Option(False, "--summary", "-s", help="Include brief summary"),
+    summary: bool = typer.Option(
+        False, "--summary", "-s", help="Include brief summary"
+    ),
     custom_prompt: Optional[str] = typer.Option(
         None, "--prompt", "-p", help="Custom extraction prompt"
     ),
@@ -157,7 +163,9 @@ def test():
     extractor = DataExtractor()
 
     if extractor.test_connection():
-        console.print("✅ All tests passed! You're ready to extract.", style="bold green")
+        console.print(
+            "✅ All tests passed! You're ready to extract.", style="bold green"
+        )
     else:
         console.print(
             "❌ Setup test failed. Please check your configuration.",
@@ -211,7 +219,9 @@ def display_pretty_output(result):
                     else json.dumps(value, indent=2)
                 )
             else:
-                value_str = str(value)[:200] + "..." if len(str(value)) > 200 else str(value)
+                value_str = (
+                    str(value)[:200] + "..." if len(str(value)) > 200 else str(value)
+                )
 
             structured_table.add_row(key, value_str)
 
@@ -229,7 +239,9 @@ def display_pretty_output(result):
         if len(result.content.links) > 5:
             links_text += f"\n... and {len(result.content.links) - 5} more links"
 
-        console.print(Panel(links_text, title="🔗 Important Links", border_style="cyan"))
+        console.print(
+            Panel(links_text, title="🔗 Important Links", border_style="cyan")
+        )
 
 
 def main():

@@ -1,6 +1,6 @@
 """LLM WebExtract - AI-powered web content extraction using LLMs."""
 
-__version__ = "1.0.4"
+__version__ = "1.1.0"
 __author__ = "Himasha Herath"
 __description__ = "AI-powered web content extraction with Large Language Models"
 
@@ -9,7 +9,6 @@ from .config.profiles import ConfigProfiles
 # Configuration imports
 from .config.settings import (
     ConfigBuilder,
-    FilterConfig,
     LLMConfig,
     ScrapingConfig,
     WebExtractConfig,
@@ -29,7 +28,6 @@ __all__ = [
     "ConfigBuilder",
     "ScrapingConfig",
     "LLMConfig",
-    "FilterConfig",
     "ConfigProfiles",
 ]
 

@@ -34,7 +34,7 @@ class OllamaClient:
         self, content: str, custom_prompt: str = None, schema: Dict[str, Any] = None
     ) -> Dict[str, Any]:
         """Generate structured data from content using LLM with improved JSON handling."""
-        
+
         # Use schema if provided, otherwise use default
         if schema:
             prompt = self._create_schema_prompt(schema)
@@ -42,9 +42,11 @@ class OllamaClient:
             prompt = custom_prompt or self._get_improved_prompt()
 
         # Truncate content if needed
-        truncated_content = content[:self.max_content_length]
+        truncated_content = content[: self.max_content_length]
         if len(content) > self.max_content_length:
-            logger.info(f"Content truncated from {len(content)} to {self.max_content_length} characters")
+            logger.info(
+                f"Content truncated from {len(content)} to {self.max_content_length} characters"
+            )
 
         full_prompt = f"""Analyze the following content and return ONLY a valid JSON object.
 
@@ -65,7 +67,9 @@ CRITICAL RULES:
 
         for attempt in range(settings.LLM_RETRY_ATTEMPTS):
             try:
-                logger.info(f"LLM generation attempt {attempt + 1}/{settings.LLM_RETRY_ATTEMPTS}")
+                logger.info(
+                    f"LLM generation attempt {attempt + 1}/{settings.LLM_RETRY_ATTEMPTS}"
+                )
 
                 response = self.client.generate(
                     model=self.model_name,
@@ -82,14 +86,18 @@ CRITICAL RULES:
 
                 # Try to parse the response
                 result = self._parse_json_response(response_text)
-                
+
                 if result and self._validate_extraction_result(result, schema):
-                    logger.info(f"Successfully extracted valid structured data on attempt {attempt + 1}")
+                    logger.info(
+                        f"Successfully extracted valid structured data on attempt {attempt + 1}"
+                    )
                     return result
 
                 # If validation failed, try once more with stricter prompt
                 if attempt == 0:
-                    logger.warning("First attempt failed validation, trying with stricter prompt")
+                    logger.warning(
+                        "First attempt failed validation, trying with stricter prompt"
+                    )
                     continue
 
             except Exception as e:
@@ -111,7 +119,9 @@ CRITICAL RULES:
             pass
 
         # Strategy 2: Extract JSON from text
-        json_match = re.search(r'\{[^{}]*\{[^{}]*\}[^{}]*\}|\{[^{}]*\}', response_text, re.DOTALL)
+        json_match = re.search(
+            r"\{[^{}]*\{[^{}]*\}[^{}]*\}|\{[^{}]*\}", response_text, re.DOTALL
+        )
         if json_match:
             try:
                 return json.loads(json_match.group())
@@ -131,32 +141,38 @@ CRITICAL RULES:
     def _clean_json_text(self, text: str) -> Optional[str]:
         """Clean potential JSON text with safer approach."""
         # Remove markdown code blocks
-        text = re.sub(r'```(?:json)?\s*\n?', '', text)
-        text = re.sub(r'\n?```', '', text)
+        text = re.sub(r"```(?:json)?\s*\n?", "", text)
+        text = re.sub(r"\n?```", "", text)
         text = text.strip()
 
         # Find JSON boundaries
-        start = text.find('{')
-        end = text.rfind('}')
-        
+        start = text.find("{")
+        end = text.rfind("}")
+
         if start == -1 or end == -1 or end <= start:
             return None
 
-        json_text = text[start:end + 1]
+        json_text = text[start : end + 1]
 
         # Safe replacements
         # Fix common LLM mistakes
-        json_text = re.sub(r',\s*}', '}', json_text)  # Remove trailing commas
-        json_text = re.sub(r',\s*]', ']', json_text)  # Remove trailing commas in arrays
-        
+        json_text = re.sub(r",\s*}", "}", json_text)  # Remove trailing commas
+        json_text = re.sub(r",\s*]", "]", json_text)  # Remove trailing commas in arrays
+
         # Fix newlines and tabs in strings (but not between JSON elements)
         def fix_string_newlines(match):
             string_content = match.group(1)
-            string_content = string_content.replace('\n', '\\n').replace('\r', '\\r').replace('\t', '\\t')
+            string_content = (
+                string_content.replace("\n", "\\n")
+                .replace("\r", "\\r")
+                .replace("\t", "\\t")
+            )
             return f'"{string_content}"'
-        
+
         # This regex matches strings but avoids the complexities of escaped quotes
-        json_text = re.sub(r'"([^"\\]*(?:\\.[^"\\]*)*)"', fix_string_newlines, json_text)
+        json_text = re.sub(
+            r'"([^"\\]*(?:\\.[^"\\]*)*)"', fix_string_newlines, json_text
+        )
 
         return json_text
 
@@ -215,7 +231,7 @@ Use appropriate empty values (empty strings, empty arrays) for missing data."""
             "entities": dict,
             "key_facts": list,
             "important_dates": list,
-            "statistics": list
+            "statistics": list,
         }
 
         for field, expected_type in expected_structure.items():
@@ -227,17 +243,21 @@ Use appropriate empty values (empty strings, empty arrays) for missing data."""
                     elif expected_type == str and result[field] is None:
                         result[field] = ""
                     else:
-                        logger.warning(f"Field {field} has wrong type: {type(result[field])}")
+                        logger.warning(
+                            f"Field {field} has wrong type: {type(result[field])}"
+                        )
 
         return True
 
-    def _validate_against_schema(self, result: Dict[str, Any], schema: Dict[str, Any]) -> bool:
+    def _validate_against_schema(
+        self, result: Dict[str, Any], schema: Dict[str, Any]
+    ) -> bool:
         """Validate result against provided schema."""
         for key, value in schema.items():
             if key not in result:
                 logger.warning(f"Missing required field: {key}")
                 return False
-            
+
             # Basic type checking based on schema value
             if isinstance(value, str):
                 if not isinstance(result[key], str):
@@ -258,15 +278,11 @@ Use appropriate empty values (empty strings, empty arrays) for missing data."""
             "topics": [],
             "category": "unknown",
             "sentiment": "neutral",
-            "entities": {
-                "people": [],
-                "organizations": [],
-                "locations": []
-            },
+            "entities": {"people": [], "organizations": [], "locations": []},
             "key_facts": [],
             "important_dates": [],
             "statistics": [],
-            "extraction_error": True
+            "extraction_error": True,
         }
 
     def extract_with_schema(
@@ -295,14 +311,18 @@ Summary (max {max_length} chars):"""
             )
 
             summary = response["response"].strip()
-            
+
             # Ensure summary doesn't exceed max length
             if len(summary) > max_length:
-                summary = summary[:max_length - 3].rsplit(' ', 1)[0] + "..."
+                summary = summary[: max_length - 3].rsplit(" ", 1)[0] + "..."
 
             return summary
 
         except Exception as e:
             logger.error(f"Failed to generate summary: {e}")
-            preview = content[:max_length - 3] + "..." if len(content) > max_length else content
+            preview = (
+                content[: max_length - 3] + "..."
+                if len(content) > max_length
+                else content
+            )
             return preview

@@ -61,7 +61,10 @@ async def example_chunked_extraction():
     extractor = Extractor()
     result = await extractor.extract(
         "https://en.wikipedia.org/wiki/Artificial_intelligence",
-        {"summary": "Brief summary of AI", "history": "Brief history of AI development"},
+        {
+            "summary": "Brief summary of AI",
+            "history": "Brief history of AI development",
+        },
     )
 
     print(f"AI Summary: {result.get('summary', 'N/A')}")

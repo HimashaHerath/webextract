@@ -37,19 +37,19 @@ class DataExtractor:
         self._extraction_cache = {}  # Simple cache for repeated URLs
 
     def extract(
-        self, 
-        url: str, 
+        self,
+        url: str,
         schema: Optional[Dict[str, str]] = None,
-        force_refresh: bool = False
+        force_refresh: bool = False,
     ) -> Optional[StructuredData]:
         """
         Extract structured data from a web page.
-        
+
         Args:
             url: The URL to extract from
             schema: Optional schema defining what to extract
             force_refresh: Skip cache and force new extraction
-            
+
         Returns:
             StructuredData object or None if extraction fails
         """
@@ -66,7 +66,9 @@ class DataExtractor:
         # Check model availability
         if not self.llm_client.is_model_available():
             logger.error(f"Model {self.config.model_name} is not available")
-            return self._create_error_result(url, f"Model {self.config.model_name} not available")
+            return self._create_error_result(
+                url, f"Model {self.config.model_name} not available"
+            )
 
         # Extract content
         extracted_content = self._scrape_content(url)
@@ -75,7 +77,7 @@ class DataExtractor:
 
         # Process with LLM
         structured_info = self._process_with_llm(extracted_content, schema)
-        
+
         # Calculate confidence
         confidence = self._calculate_confidence(extracted_content, structured_info)
 
@@ -96,32 +98,32 @@ class DataExtractor:
         return result
 
     def extract_batch(
-        self, 
-        urls: List[str], 
+        self,
+        urls: List[str],
         schema: Optional[Dict[str, str]] = None,
-        max_workers: int = 3
+        max_workers: int = 3,
     ) -> List[Optional[StructuredData]]:
         """
         Extract data from multiple URLs.
-        
+
         Args:
             urls: List of URLs to extract from
             schema: Optional schema for extraction
             max_workers: Maximum concurrent extractions
-            
+
         Returns:
             List of StructuredData objects (None for failed extractions)
         """
         from concurrent.futures import ThreadPoolExecutor, as_completed
-        
+
         results = [None] * len(urls)
-        
+
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             future_to_index = {
-                executor.submit(self.extract, url, schema): i 
+                executor.submit(self.extract, url, schema): i
                 for i, url in enumerate(urls)
             }
-            
+
             for future in as_completed(future_to_index):
                 index = future_to_index[future]
                 try:
@@ -129,21 +131,19 @@ class DataExtractor:
                 except Exception as e:
                     logger.error(f"Batch extraction error for index {index}: {e}")
                     results[index] = None
-        
+
         return results
 
     def extract_with_custom_schema(
-        self,
-        url: str,
-        extraction_schema: Dict[str, str]
+        self, url: str, extraction_schema: Dict[str, str]
     ) -> Optional[StructuredData]:
         """
         Extract data using a custom schema.
-        
+
         Args:
             url: URL to extract from
             extraction_schema: Dictionary mapping field names to extraction instructions
-            
+
         Example:
             schema = {
                 "price": "Extract the product price",
@@ -166,82 +166,83 @@ class DataExtractor:
         try:
             with WebScraper() as scraper:
                 content = scraper.scrape(url)
-                
+
                 if content and len(content.main_content.strip()) < 50:
-                    logger.warning(f"Very short content from {url}: {len(content.main_content)} chars")
-                
+                    logger.warning(
+                        f"Very short content from {url}: {len(content.main_content)} chars"
+                    )
+
                 return content
-                
+
         except Exception as e:
             logger.error(f"Scraping failed for {url}: {e}")
             return None
 
     def _process_with_llm(
-        self, 
-        content: ExtractedContent, 
-        schema: Optional[Dict[str, str]] = None
+        self, content: ExtractedContent, schema: Optional[Dict[str, str]] = None
     ) -> Dict[str, any]:
         """Process content with LLM."""
         try:
             # Prepare content for LLM
             llm_content = self._prepare_content_for_llm(content)
-            
+
             if schema:
                 # Use custom schema
                 return self.llm_client.extract_with_schema(llm_content, schema)
             else:
                 # Use default extraction
                 return self.llm_client.generate_structured_data(
-                    content=llm_content,
-                    custom_prompt=self.config.custom_prompt
+                    content=llm_content, custom_prompt=self.config.custom_prompt
                 )
-                
+
         except Exception as e:
             logger.error(f"LLM processing failed: {e}")
             return {
                 "error": f"LLM processing failed: {str(e)}",
-                "summary": content.main_content[:200] + "..." if len(content.main_content) > 200 else content.main_content,
-                "extraction_error": True
+                "summary": (
+                    content.main_content[:200] + "..."
+                    if len(content.main_content) > 200
+                    else content.main_content
+                ),
+                "extraction_error": True,
             }
 
     def _prepare_content_for_llm(self, content: ExtractedContent) -> str:
         """Prepare content for LLM processing."""
         # Combine different content parts intelligently
         parts = []
-        
+
         if content.title:
             parts.append(f"TITLE: {content.title}")
-        
+
         if content.description:
             parts.append(f"DESCRIPTION: {content.description}")
-        
+
         # Add main content
         parts.append(f"CONTENT: {content.main_content}")
-        
+
         # Add some metadata if relevant
         if content.metadata.get("og_title"):
             parts.append(f"OG_TITLE: {content.metadata['og_title']}")
-        
+
         return "\n\n".join(parts)
 
     def _calculate_confidence(
-        self, 
-        content: ExtractedContent, 
-        structured_info: Dict[str, any]
+        self, content: ExtractedContent, structured_info: Dict[str, any]
     ) -> float:
         """Calculate extraction confidence score."""
         score = 0.0
-        
+
         # Base score for successful extraction
         score += 0.2
-        
+
         # Content quality factors
         if content.title:
             score += 0.1
-        
+
         if content.description:
             score += 0.05
-        
+
         content_length = len(content.main_content)
         if content_length > 500:
             score += 0.15
@@ -249,36 +250,42 @@ class DataExtractor:
             score += 0.1
         elif content_length > 100:
             score += 0.05
-        
+
         # Structured data quality
-        if not structured_info.get("error") and not structured_info.get("extraction_error"):
+        if not structured_info.get("error") and not structured_info.get(
+            "extraction_error"
+        ):
             score += 0.2
-            
+
             # Check for key fields
             if structured_info.get("summary") and len(structured_info["summary"]) > 20:
                 score += 0.1
-            
+
             if structured_info.get("topics") and len(structured_info["topics"]) > 0:
                 score += 0.05
-            
+
             if structured_info.get("entities"):
                 entities = structured_info["entities"]
                 if isinstance(entities, dict):
                     total_entities = sum(
-                        len(v) if isinstance(v, list) else 0 
-                        for v in entities.values()
+                        len(v) if isinstance(v, list) else 0 for v in entities.values()
                     )
                     if total_entities > 0:
                         score += 0.05
-            
+
             # Bonus for rich extraction
-            field_count = len([k for k, v in structured_info.items() 
-                             if v and k not in ["error", "extraction_error"]])
+            field_count = len(
+                [
+                    k
+                    for k, v in structured_info.items()
+                    if v and k not in ["error", "extraction_error"]
+                ]
+            )
             if field_count >= 6:
                 score += 0.1
             elif field_count >= 4:
                 score += 0.05
-        
+
         return min(score, 1.0)
 
     def _create_error_result(self, url: str, error_message: str) -> StructuredData:
@@ -291,12 +298,12 @@ class DataExtractor:
                 description=None,
                 main_content=f"Extraction failed: {error_message}",
                 links=[],
-                metadata={"error": error_message}
+                metadata={"error": error_message},
             ),
             structured_info={
                 "error": error_message,
                 "summary": f"Failed to extract content: {error_message}",
-                "extraction_error": True
+                "extraction_error": True,
             },
             confidence=0.0,
         )
@@ -307,7 +314,7 @@ class DataExtractor:
             if not self.llm_client.is_model_available():
                 logger.error(f"Model {self.config.model_name} is not available")
                 print(f"❌ Model '{self.config.model_name}' is not available")
-                
+
                 # Try to list available models
                 try:
                     models = self.llm_client.client.list()
@@ -322,17 +329,16 @@ class DataExtractor:
                 except Exception:
                     print("❌ Could not connect to Ollama. Is it running?")
                     print("   Start with: ollama serve")
-                
+
                 return False
 
             print(f"✅ Model '{self.config.model_name}' is available")
-            
+
             # Test with a simple extraction
             test_result = self.llm_client.generate_structured_data(
-                "This is a test.", 
-                custom_prompt="Extract a summary"
+                "This is a test.", custom_prompt="Extract a summary"
             )
-            
+
             if test_result:
                 print("✅ LLM extraction test successful")
                 return True
