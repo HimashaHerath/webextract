@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "llm-webextract"
-version = "1.1.1"
+version = "1.1.2"
 description = "AI-powered web content extraction with Large Language Models"
 readme = "README.md"
 license = {text = "MIT"}
@@ -62,9 +62,9 @@ all = [
 llm-webextract = "webextract.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/himasha-herath/llm-webextract"
-Repository = "https://github.com/himasha-herath/llm-webextract"
-Issues = "https://github.com/himasha-herath/llm-webextract/issues"
+Homepage = "https://github.com/HimashaHerath/webextract"
+Repository = "https://github.com/HimashaHerath/webextract"
+Issues = "https://github.com/HimashaHerath/webextract/issues"
 
 [tool.black]
 line-length = 100
