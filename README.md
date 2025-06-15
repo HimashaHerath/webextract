@@ -208,8 +208,8 @@ Found a bug? Want to add a feature? PRs are welcome!
 **Quick Start for Contributors:**
 ```bash
 # Fork and clone the repo
-git clone https://github.com/yourusername/llm-scraper.git
-cd llm-scraper
+git clone https://github.com/HimashaHerath/webextract.git
+cd webextract
 
 # Install in development mode
 pip install -e ".[dev]"
