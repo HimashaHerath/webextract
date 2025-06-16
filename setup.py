@@ -12,9 +12,7 @@ long_description = (this_directory / "README.md").read_text(encoding="utf-8")
 requirements = []
 try:
     with open("requirements.txt", "r", encoding="utf-8") as f:
-        requirements = [
-            line.strip() for line in f if line.strip() and not line.startswith("#")
-        ]
+        requirements = [line.strip() for line in f if line.strip() and not line.startswith("#")]
 except FileNotFoundError:
     requirements = [
         "playwright>=1.40.0",
@@ -28,7 +26,7 @@ except FileNotFoundError:
 
 setup(
     name="llm-webextract",
-    version="1.1.2",
+    version="1.2.0",
     author="Himasha Herath",
     author_email="himasha626@gmail.com",
     description="AI-powered web content extraction with Large Language Models",
