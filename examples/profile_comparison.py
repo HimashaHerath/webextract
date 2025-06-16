@@ -65,7 +65,10 @@ def main():
     print("=" * 60)
 
     # Test URL
-    url = "https://dev.to/nodeshiftcloud/claude-4-opus-vs-sonnet-benchmarks-and-dev-workflow-with-claude-code-11fa"
+    url = (
+        "https://dev.to/nodeshiftcloud/claude-4-opus-vs-sonnet-benchmarks-"
+        "and-dev-workflow-with-claude-code-11fa"
+    )
 
     print(f"🌐 Test URL: {url}")
     print(f"📋 Testing all available profiles...\n")
@@ -94,9 +97,10 @@ def main():
             print(f"   ⏱️  Time: {result['time']:.1f}s")
             print(f"   🎯 Confidence: {result['confidence']:.1%}")
             print(f"   📊 Fields extracted: {result['field_count']}")
-            print(
-                f"   🔤 Available fields: {', '.join(result['structured_fields'][:5])}{'...' if len(result['structured_fields']) > 5 else ''}"
-            )
+            fields = result['structured_fields'][:5]
+            fields_str = ', '.join(fields)
+            ellipsis = '...' if len(result['structured_fields']) > 5 else ''
+            print(f"   🔤 Available fields: {fields_str}{ellipsis}")
 
             # Show a snippet of the summary
             summary = (
@@ -140,17 +144,14 @@ def main():
 
         # Calculate averages
         avg_time = sum(r["time"] for r in successful_results) / len(successful_results)
-        avg_confidence = sum(r["confidence"] for r in successful_results) / len(
-            successful_results
-        )
-        avg_fields = sum(r["field_count"] for r in successful_results) / len(
-            successful_results
-        )
+        result_count = len(successful_results)
+        avg_confidence = sum(r["confidence"] for r in successful_results) / result_count
+        avg_fields = sum(r["field_count"] for r in successful_results) / result_count
 
         print(f"\n📈 Overall Statistics:")
-        print(
-            f"   • Success rate: {len(successful_results)}/{len(results)} ({len(successful_results)/len(results)*100:.1f}%)"
-        )
+        success_count = len(successful_results)
+        success_rate = success_count / len(results) * 100
+        print(f"   • Success rate: {success_count}/{len(results)} ({success_rate:.1f}%)")
         print(f"   • Average time: {avg_time:.1f}s")
         print(f"   • Average confidence: {avg_confidence:.1%}")
         print(f"   • Average fields: {avg_fields:.1f}")
@@ -197,11 +198,17 @@ def main():
         most_accurate = max(successful_results, key=lambda x: x["confidence"])
 
         print(f"\n⚖️  Speed vs Accuracy Trade-off:")
+        fastest_time = fastest['time']
+        fastest_conf = fastest['confidence']
+        accurate_time = most_accurate['time']
+        accurate_conf = most_accurate['confidence']
         print(
-            f"   • Fastest: {fastest['profile']} ({fastest['time']:.1f}s, {fastest['confidence']:.1%} confidence)"
+            f"   • Fastest: {fastest['profile']} "
+            f"({fastest_time:.1f}s, {fastest_conf:.1%} confidence)"
         )
         print(
-            f"   • Most Accurate: {most_accurate['profile']} ({most_accurate['time']:.1f}s, {most_accurate['confidence']:.1%} confidence)"
+            f"   • Most Accurate: {most_accurate['profile']} "
+            f"({accurate_time:.1f}s, {accurate_conf:.1%} confidence)"
         )
 
 

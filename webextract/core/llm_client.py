@@ -28,7 +28,10 @@ class BaseLLMClient(ABC):
 
     @abstractmethod
     def generate_structured_data(
-        self, content: str, custom_prompt: str = None, schema: Dict[str, Any] = None
+        self,
+        content: str,
+        custom_prompt: str = None,
+        schema: Dict[str, Any] = None,
     ) -> Dict[str, Any]:
         """Generate structured data from content."""
         pass
@@ -38,7 +41,9 @@ class BaseLLMClient(ABC):
         """Generate a brief summary of the content."""
         pass
 
-    def extract_with_schema(self, content: str, schema: Dict[str, Any]) -> Dict[str, Any]:
+    def extract_with_schema(
+        self, content: str, schema: Dict[str, Any]
+    ) -> Dict[str, Any]:
         """Extract data according to a specific schema."""
         return self.generate_structured_data(content, schema=schema)
 
@@ -86,7 +91,8 @@ Use appropriate empty values (empty strings, empty arrays) for missing data."""
             pass
 
         # Strategy 2: Extract JSON from text
-        json_match = re.search(r"\{[^{}]*\{[^{}]*\}[^{}]*\}|\{[^{}]*\}", response_text, re.DOTALL)
+        json_pattern = r"\{[^{}]*\{[^{}]*\}[^{}]*\}|\{[^{}]*\}"
+        json_match = re.search(json_pattern, response_text, re.DOTALL)
         if json_match:
             try:
                 return json.loads(json_match.group())
@@ -117,7 +123,7 @@ Use appropriate empty values (empty strings, empty arrays) for missing data."""
         if start == -1 or end == -1 or end <= start:
             return None
 
-        json_text = text[start : end + 1]
+        json_text = text[start: end + 1]
 
         # Safe replacements
         # Fix common LLM mistakes
@@ -128,17 +134,22 @@ Use appropriate empty values (empty strings, empty arrays) for missing data."""
         def fix_string_newlines(match):
             string_content = match.group(1)
             string_content = (
-                string_content.replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t")
+                string_content.replace("\n", "\\n")
+                .replace("\r", "\\r")
+                .replace("\t", "\\t")
             )
             return f'"{string_content}"'
 
         # This regex matches strings but avoids the complexities of escaped quotes
-        json_text = re.sub(r'"([^"\\]*(?:\\.[^"\\]*)*)"', fix_string_newlines, json_text)
+        string_pattern = r'"([^"\\]*(?:\\.[^"\\]*)*)"
+        json_text = re.sub(string_pattern, fix_string_newlines, json_text)
 
         return json_text
 
     def _validate_extraction_result(
-        self, result: Dict[str, Any], schema: Optional[Dict[str, Any]] = None
+        self,
+        result: Dict[str, Any],
+        schema: Optional[Dict[str, Any]] = None,
     ) -> bool:
         """Validate extraction result against schema or default requirements."""
         if not isinstance(result, dict):
@@ -173,11 +184,15 @@ Use appropriate empty values (empty strings, empty arrays) for missing data."""
                     elif expected_type == str and result[field] is None:
                         result[field] = ""
                     else:
-                        logger.warning(f"Field {field} has wrong type: {type(result[field])}")
+                        logger.warning(
+                            f"Field {field} has wrong type: {type(result[field])}"
+                        )
 
         return True
 
-    def _validate_against_schema(self, result: Dict[str, Any], schema: Dict[str, Any]) -> bool:
+    def _validate_against_schema(
+        self, result: Dict[str, Any], schema: Dict[str, Any]
+    ) -> bool:
         """Validate result against provided schema."""
         for key, value in schema.items():
             if key not in result:
@@ -234,7 +249,10 @@ class OllamaClient(BaseLLMClient):
             return False
 
     def generate_structured_data(
-        self, content: str, custom_prompt: str = None, schema: Dict[str, Any] = None
+        self,
+        content: str,
+        custom_prompt: str = None,
+        schema: Dict[str, Any] = None,
     ) -> Dict[str, Any]:
         """Generate structured data from content using Ollama with improved JSON handling."""
         try:
@@ -248,7 +266,8 @@ class OllamaClient(BaseLLMClient):
             truncated_content = content[: self.max_content_length]
             if len(content) > self.max_content_length:
                 logger.info(
-                    f"Content truncated from {len(content)} to {self.max_content_length} characters"
+                    f"Content truncated from {len(content)} to "
+                    f"{self.max_content_length} characters"
                 )
 
             full_prompt = f"""Analyze the following content and return ONLY a valid JSON object.
@@ -270,7 +289,8 @@ CRITICAL RULES:
 
             for attempt in range(settings.LLM_RETRY_ATTEMPTS):
                 try:
-                    logger.info(f"Ollama generation attempt {attempt + 1}/{settings.LLM_RETRY_ATTEMPTS}")
+                    retry_count = settings.LLM_RETRY_ATTEMPTS
+                    logger.info(f"Ollama generation attempt {attempt + 1}/{retry_count}")
 
                     response = self.client.generate(
                         model=self.model_name,
@@ -290,21 +310,31 @@ CRITICAL RULES:
 
                     if result and self._validate_extraction_result(result, schema):
                         logger.info(
-                            f"Successfully extracted valid structured data on attempt {attempt + 1}"
+                            f"Successfully extracted valid structured data on "
+                            f"attempt {attempt + 1}"
                         )
                         return result
 
                     # If validation failed, try once more with stricter prompt
                     if attempt == 0:
-                        logger.warning("First attempt failed validation, trying with stricter prompt")
+                        logger.warning(
+                            "First attempt failed validation, trying with stricter prompt"
+                        )
                         continue
 
                 except Exception as e:
-                    logger.error(f"Ollama generation failed (attempt {attempt + 1}): {e}")
+                    logger.error(
+                        f"Ollama generation failed (attempt {attempt + 1}): {e}"
+                    )
                     if "connection" in str(e).lower():
-                        raise LLMError(f"Cannot connect to Ollama server at {self.base_url}: {e}")
+                        raise LLMError(
+                            f"Cannot connect to Ollama server at {self.base_url}: {e}"
+                        )
                     if attempt == settings.LLM_RETRY_ATTEMPTS - 1:
-                        raise LLMError(f"Ollama processing failed after {settings.LLM_RETRY_ATTEMPTS} attempts: {e}")
+                        retry_count = settings.LLM_RETRY_ATTEMPTS
+                        raise LLMError(
+                            f"Ollama processing failed after {retry_count} attempts: {e}"
+                        )
 
             # Fallback if all attempts failed but no exception was raised
             return self._create_safe_fallback(content[:200])
@@ -316,12 +346,11 @@ CRITICAL RULES:
 
     def summarize_content(self, content: str, max_length: int = 200) -> str:
         """Generate a brief summary of the content using Ollama."""
-        prompt = f"""Provide a clear, concise summary of this content in no more than {max_length} characters.
-Focus on the main points and key takeaways.
-
-Content: {content[:2000]}
-
-Summary (max {max_length} chars):"""
+        prompt = (
+            f"Provide a clear, concise summary of this content in no more than "
+            f"{max_length} characters. Focus on the main points and key takeaways.\n\n"
+            f"Content: {content[:2000]}\n\nSummary (max {max_length} chars):"
+        )
 
         try:
             response = self.client.generate(
@@ -343,5 +372,8 @@ Summary (max {max_length} chars):"""
 
         except Exception as e:
             logger.error(f"Failed to generate Ollama summary: {e}")
-            preview = content[: max_length - 3] + "..." if len(content) > max_length else content
+            if len(content) > max_length:
+                preview = content[: max_length - 3] + "..."
+            else:
+                preview = content
             return preview

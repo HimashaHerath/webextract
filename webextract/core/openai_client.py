@@ -13,7 +13,12 @@ logger = logging.getLogger(__name__)
 class OpenAIClient(BaseLLMClient):
     """Client for interacting with OpenAI GPT models."""
 
-    def __init__(self, api_key: str, model_name: str = "gpt-4o-mini", base_url: str = None):
+    def __init__(
+        self,
+        api_key: str,
+        model_name: str = "gpt-4o-mini",
+        base_url: str = None,
+    ):
         super().__init__(model_name)
         self.api_key = api_key
         self.base_url = base_url or "https://api.openai.com/v1"
@@ -25,8 +30,7 @@ class OpenAIClient(BaseLLMClient):
         try:
             import openai
             self._client = openai.OpenAI(
-                api_key=self.api_key,
-                base_url=self.base_url
+                api_key=self.api_key, base_url=self.base_url
             )
         except ImportError:
             raise LLMError(
@@ -47,7 +51,10 @@ class OpenAIClient(BaseLLMClient):
             return False
 
     def generate_structured_data(
-        self, content: str, custom_prompt: str = None, schema: Dict[str, Any] = None
+        self,
+        content: str,
+        custom_prompt: str = None,
+        schema: Dict[str, Any] = None,
     ) -> Dict[str, Any]:
         """Generate structured data from content using OpenAI."""
         try:
@@ -61,10 +68,16 @@ class OpenAIClient(BaseLLMClient):
             truncated_content = content[:self.max_content_length]
             if len(content) > self.max_content_length:
                 logger.info(
-                    f"Content truncated from {len(content)} to {self.max_content_length} characters"
+                    f"Content truncated from {len(content)} to "
+                    f"{self.max_content_length} characters"
                 )
 
-            system_message = """You are an expert content analyzer. Extract structured information from the provided content and return it as valid JSON. Follow the instructions exactly and return only the JSON object."""
+            system_message = (
+                "You are an expert content analyzer. Extract structured "
+                "information from the provided content and return it as valid "
+                "JSON. Follow the instructions exactly and return only the "
+                "JSON object."
+            )
 
             user_message = f"""Analyze the following content and return ONLY a valid JSON object.
 
@@ -86,39 +99,50 @@ CRITICAL RULES:
             for attempt in range(3):  # OpenAI is more reliable, fewer retries needed
                 try:
                     logger.info(f"OpenAI generation attempt {attempt + 1}/3")
-                    
+
                     response = self._client.chat.completions.create(
                         model=self.model_name,
                         messages=[
                             {"role": "system", "content": system_message},
-                            {"role": "user", "content": user_message}
+                            {"role": "user", "content": user_message},
                         ],
                         temperature=0.1,
                         max_tokens=2000,
-                        response_format={"type": "json_object"}  # Force JSON output
+                        response_format={"type": "json_object"},  # Force JSON output
                     )
 
                     response_text = response.choices[0].message.content.strip()
-                    logger.debug(f"OpenAI response length: {len(response_text)} characters")
+                    logger.debug(
+                        f"OpenAI response length: {len(response_text)} characters"
+                    )
 
                     # Parse the response
                     result = self._parse_json_response(response_text)
 
                     if result and self._validate_extraction_result(result, schema):
-                        logger.info(f"Successfully extracted valid structured data on attempt {attempt + 1}")
+                        logger.info(
+                            f"Successfully extracted valid structured data on "
+                            f"attempt {attempt + 1}"
+                        )
                         return result
 
                 except Exception as e:
-                    logger.error(f"OpenAI generation failed (attempt {attempt + 1}): {e}")
+                    logger.error(
+                        f"OpenAI generation failed (attempt {attempt + 1}): {e}"
+                    )
                     if "rate_limit" in str(e).lower():
                         raise LLMError(f"OpenAI rate limit exceeded: {e}")
                     elif "authentication" in str(e).lower():
                         raise AuthenticationError(f"OpenAI authentication failed: {e}")
                     elif "model" in str(e).lower() and "not found" in str(e).lower():
-                        raise ModelNotAvailableError(f"OpenAI model {self.model_name} not available: {e}")
-                    
+                        raise ModelNotAvailableError(
+                            f"OpenAI model {self.model_name} not available: {e}"
+                        )
+
                     if attempt == 2:  # Last attempt
-                        raise LLMError(f"OpenAI processing failed after 3 attempts: {e}")
+                        raise LLMError(
+                            f"OpenAI processing failed after 3 attempts: {e}"
+                        )
 
             return self._create_safe_fallback(content[:200])
 
@@ -134,13 +158,20 @@ CRITICAL RULES:
                 model=self.model_name,
                 messages=[
                     {
-                        "role": "system", 
-                        "content": "You are a content summarizer. Provide clear, concise summaries."
+                        "role": "system",
+                        "content": (
+                            "You are a content summarizer. Provide clear, "
+                            "concise summaries."
+                        ),
                     },
                     {
-                        "role": "user", 
-                        "content": f"Provide a clear, concise summary of this content in no more than {max_length} characters. Focus on the main points and key takeaways.\n\nContent: {content[:2000]}"
-                    }
+                        "role": "user",
+                        "content": (
+                            f"Provide a clear, concise summary of this content in "
+                            f"no more than {max_length} characters. Focus on the "
+                            f"main points and key takeaways.\n\nContent: {content[:2000]}"
+                        ),
+                    },
                 ],
                 temperature=0.3,
                 max_tokens=max_length // 3,
@@ -156,5 +187,8 @@ CRITICAL RULES:
 
         except Exception as e:
             logger.error(f"Failed to generate OpenAI summary: {e}")
-            preview = content[:max_length - 3] + "..." if len(content) > max_length else content
+            if len(content) > max_length:
+                preview = content[:max_length - 3] + "..."
+            else:
+                preview = content
             return preview

@@ -68,7 +68,7 @@ def main():
 
     # List of URLs to process
     urls = [
-        "https://dev.to/nodeshiftcloud/claude-4-opus-vs-sonnet-benchmarks-and-dev-workflow-with-claude-code-11fa",
+        "https://dev.to/nodeshiftcloud/claude-4-opus-vs-sonnet-benchmarks-and-dev-workflow-with-claude-code-11fa",  # noqa: E501
         "https://dev.to/openai/introducing-gpt-4o-mini-64g",
         "https://dev.to/anthropic/claude-3-5-sonnet-now-available-36a1",
         # Add more URLs as needed
@@ -91,16 +91,15 @@ def main():
         sequential_results.append(result)
 
         if result["success"]:
-            print(
-                f"✅ [{i}] Success ({result['extraction_time']:.1f}s) - {result['title'][:50]}..."
-            )
+            title_preview = result['title'][:50]
+            time_taken = result['extraction_time']
+            print(f"✅ [{i}] Success ({time_taken:.1f}s) - {title_preview}...")
         else:
             print(f"❌ [{i}] Failed: {result['error']}")
 
     total_sequential_time = time.time() - total_start_time
-    print(
-        f"\n📊 Sequential Results: {len([r for r in sequential_results if r['success']])}/{len(urls)} successful"
-    )
+    successful_count = len([r for r in sequential_results if r['success']])
+    print(f"\n📊 Sequential Results: {successful_count}/{len(urls)} successful")
     print(f"⏱️  Total time: {total_sequential_time:.1f}s")
 
     # Method 2: Parallel processing (be careful with rate limits)
@@ -124,20 +123,19 @@ def main():
             parallel_results.append(result)
 
             if result["success"]:
-                print(
-                    f"✅ [{result['index']}] Success ({result['extraction_time']:.1f}s) - {result['title'][:50]}..."
-                )
+                idx = result['index']
+                time_taken = result['extraction_time']
+                title_preview = result['title'][:50]
+                print(f"✅ [{idx}] Success ({time_taken:.1f}s) - {title_preview}...")
             else:
                 print(f"❌ [{result['index']}] Failed: {result['error']}")
 
     total_parallel_time = time.time() - total_start_time
-    print(
-        f"\n📊 Parallel Results: {len([r for r in parallel_results if r['success']])}/{len(urls)} successful"
-    )
+    successful_count = len([r for r in parallel_results if r['success']])
+    print(f"\n📊 Parallel Results: {successful_count}/{len(urls)} successful")
     print(f"⏱️  Total time: {total_parallel_time:.1f}s")
-    print(
-        f"🚀 Speed improvement: {total_sequential_time/total_parallel_time:.1f}x faster"
-    )
+    speed_improvement = total_sequential_time / total_parallel_time
+    print(f"🚀 Speed improvement: {speed_improvement:.1f}x faster")
 
     # Method 3: Batch analysis with aggregation
     print(f"\n3️⃣ Batch Analysis & Aggregation:")
@@ -150,15 +148,14 @@ def main():
         avg_confidence = sum(r["confidence"] for r in successful_results) / len(
             successful_results
         )
-        avg_content_length = sum(r["content_length"] for r in successful_results) / len(
-            successful_results
-        )
+        total_content_len = sum(r["content_length"] for r in successful_results)
+        avg_content_length = total_content_len / len(successful_results)
         total_content = sum(r["content_length"] for r in successful_results)
 
         print(f"📈 Batch Statistics:")
-        print(
-            f"   • Success rate: {len(successful_results)}/{len(urls)} ({len(successful_results)/len(urls)*100:.1f}%)"
-        )
+        success_count = len(successful_results)
+        success_rate = success_count / len(urls) * 100
+        print(f"   • Success rate: {success_count}/{len(urls)} ({success_rate:.1f}%)")
         print(f"   • Average confidence: {avg_confidence:.1%}")
         print(f"   • Average content length: {avg_content_length:.0f} chars")
         print(f"   • Total content processed: {total_content:,} chars")
@@ -188,9 +185,10 @@ def main():
                 topic_counts[topic] = topic_counts.get(topic, 0) + 1
 
             print(f"\n🏷️  Common Topics:")
-            for topic, count in sorted(
+            sorted_topics = sorted(
                 topic_counts.items(), key=lambda x: x[1], reverse=True
-            )[:5]:
+            )[:5]
+            for topic, count in sorted_topics:
                 print(f"   • {topic} ({count} mentions)")
 
         if all_organizations:
@@ -200,9 +198,10 @@ def main():
                 org_counts[org] = org_counts.get(org, 0) + 1
 
             print(f"\n🏢 Organizations Mentioned:")
-            for org, count in sorted(
+            sorted_orgs = sorted(
                 org_counts.items(), key=lambda x: x[1], reverse=True
-            )[:5]:
+            )[:5]
+            for org, count in sorted_orgs:
                 print(f"   • {org} ({count} mentions)")
 
         # Save results to file

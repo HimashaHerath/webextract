@@ -22,11 +22,11 @@ def main():
     # Method 1: Quick extraction (simplest)
     print("\n⚡ Quick Extraction:")
     url = "https://techcrunch.com/2024/01/15/ai-industry-trends/"
-    
+
     try:
         print(f"🔍 Extracting from: {url}")
         result = webextract.quick_extract(url)  # Uses Ollama by default
-        
+
         if result and result.is_successful:
             print("✅ Quick extraction successful!")
             print(f"🎯 Confidence: {result.confidence:.1%}")
@@ -34,7 +34,7 @@ def main():
             print(f"🏷️ Topics: {', '.join(result.get_topics()[:3])}")
         else:
             print("❌ Quick extraction failed")
-            
+
     except Exception as e:
         print(f"❌ Error: {e}")
         print("\n💡 Troubleshooting:")
@@ -65,11 +65,12 @@ def main():
                 # Entities
                 entities = info.get('entities', {})
                 if entities.get('organizations'):
-                    print(f"   Organizations: {', '.join(entities['organizations'][:3])}")
-                    
+                    orgs = entities['organizations'][:3]
+                    print(f"   Organizations: {', '.join(orgs)}")
+
         else:
             print("❌ Profile extraction failed")
-            
+
     except Exception as e:
         print(f"❌ Error with profile: {e}")
 
@@ -79,12 +80,14 @@ def main():
     
     try:
         # Build custom configuration
-        config = (ConfigBuilder()
-                 .with_ollama("llama3.2")  # Specify model
-                 .with_timeout(45)         # Custom timeout
-                 .with_content_limit(8000) # Content limit
-                 .with_temperature(0.1)    # Low temperature for consistency
-                 .build())
+        config = (
+            ConfigBuilder()
+            .with_ollama("llama3.2")  # Specify model
+            .with_timeout(45)  # Custom timeout
+            .with_content_limit(8000)  # Content limit
+            .with_temperature(0.1)  # Low temperature for consistency
+            .build()
+        )
         
         custom_extractor = WebExtractor(config)
         result = custom_extractor.extract(url)
@@ -101,7 +104,7 @@ def main():
             
         else:
             print("❌ Custom extraction failed")
-            
+
     except Exception as e:
         print(f"❌ Error with custom config: {e}")
 

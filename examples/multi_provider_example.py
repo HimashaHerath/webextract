@@ -13,14 +13,14 @@ Requirements:
 
 import os
 from webextract import (
-    WebExtractor, 
+    WebExtractor,
     ConfigBuilder,
     # Exception types for proper error handling
     ExtractionError,
-    ScrapingError, 
+    ScrapingError,
     LLMError,
     AuthenticationError,
-    ConfigurationError
+    ConfigurationError,
 )
 from webextract.core.llm_factory import get_available_providers
 
@@ -35,7 +35,7 @@ def demo_provider_availability():
         status = "✅ Available" if info["available"] else "❌ Not installed"
         print(f"   {name.title()}: {status}")
         print(f"      Requires: {info['requires']}")
-    
+
     return providers
 
 
@@ -52,7 +52,7 @@ def try_ollama_extraction(url: str):
         if not extractor.test_connection():
             print("❌ Ollama connection failed")
             return None
-            
+
         print("✅ Ollama connection successful")
         result = extractor.extract(url)
         
@@ -84,7 +84,7 @@ def try_openai_extraction(url: str, api_key: str = None):
         print("❌ No OpenAI API key provided")
         print("💡 Set OPENAI_API_KEY environment variable or pass api_key parameter")
         return None
-    
+
     try:
         config = ConfigBuilder().with_openai(api_key, "gpt-4o-mini").build()
         extractor = WebExtractor(config)
@@ -123,9 +123,13 @@ def try_anthropic_extraction(url: str, api_key: str = None):
         print("❌ No Anthropic API key provided")
         print("💡 Set ANTHROPIC_API_KEY environment variable or pass api_key parameter")
         return None
-    
+
     try:
-        config = ConfigBuilder().with_anthropic(api_key, "claude-3-5-sonnet-20241022").build()
+        config = (
+            ConfigBuilder()
+            .with_anthropic(api_key, "claude-3-5-sonnet-20241022")
+            .build()
+        )
         extractor = WebExtractor(config)
         
         print("✅ Anthropic configuration created")
@@ -155,7 +159,7 @@ def compare_results(results: dict):
     if not results:
         print("\n❌ No successful extractions to compare")
         return
-    
+
     print(f"\n📊 Comparison of {len(results)} Provider(s):")
     print("=" * 50)
     
@@ -180,8 +184,8 @@ def fallback_extraction_strategy(url: str):
     # Strategy: Try local first, then cloud providers
     providers_to_try = [
         ("ollama", try_ollama_extraction),
-        ("openai", try_openai_extraction), 
-        ("anthropic", try_anthropic_extraction)
+        ("openai", try_openai_extraction),
+        ("anthropic", try_anthropic_extraction),
     ]
     
     for provider_name, extraction_func in providers_to_try:
@@ -195,11 +199,11 @@ def fallback_extraction_strategy(url: str):
                 return result
             else:
                 print(f"❌ {provider_name.title()} failed, trying next...")
-                
+
         except Exception as e:
             print(f"❌ {provider_name.title()} error: {e}")
             continue
-    
+
     print("\n❌ All providers failed!")
     return None
 

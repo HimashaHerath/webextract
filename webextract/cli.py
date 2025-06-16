@@ -35,16 +35,24 @@ def extract(
     output_format: str = typer.Option(
         "json", "--format", "-f", help="Output format (json, pretty)"
     ),
-    output_file: Optional[str] = typer.Option(None, "--output", "-o", help="Output file path"),
-    model: str = typer.Option(settings.DEFAULT_MODEL, "--model", "-m", help="LLM model to use"),
+    output_file: Optional[str] = typer.Option(
+        None, "--output", "-o", help="Output file path"
+    ),
+    model: str = typer.Option(
+        settings.DEFAULT_MODEL, "--model", "-m", help="LLM model to use"
+    ),
     max_content: int = typer.Option(
         settings.MAX_CONTENT_LENGTH, "--max-content", help="Max content length"
     ),
-    summary: bool = typer.Option(False, "--summary", "-s", help="Include brief summary"),
+    summary: bool = typer.Option(
+        False, "--summary", "-s", help="Include brief summary"
+    ),
     custom_prompt: Optional[str] = typer.Option(
         None, "--prompt", "-p", help="Custom extraction prompt"
     ),
-    verbose: bool = typer.Option(False, "--verbose", "-v", help="Verbose output"),
+    verbose: bool = typer.Option(
+        False, "--verbose", "-v", help="Verbose output"
+    ),
 ):
     """Extract structured data from a webpage."""
 
