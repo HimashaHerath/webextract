@@ -17,7 +17,6 @@ env:
 permissions:
   contents: write
   packages: write
-  id-token: write  # for trusted publishing to PyPI
 
 jobs:
   validate-release:
@@ -38,17 +37,17 @@ jobs:
         else
           VERSION="${{ github.ref_name }}"
         fi
-        
+
         # Remove 'v' prefix if present
         VERSION=${VERSION#v}
-        
+
         # Check if it's a prerelease (contains alpha, beta, rc)
         if [[ "$VERSION" =~ (alpha|beta|rc) ]]; then
           IS_PRERELEASE=true
         else
           IS_PRERELEASE=false
         fi
-        
+
         echo "version=$VERSION" >> $GITHUB_OUTPUT
         echo "is-prerelease=$IS_PRERELEASE" >> $GITHUB_OUTPUT
         echo "Release version: $VERSION (prerelease: $IS_PRERELEASE)"
@@ -131,9 +130,6 @@ jobs:
     name: Build and Publish
     needs: [validate-release, test, code-quality]
     runs-on: ubuntu-latest
-    environment: 
-      name: pypi
-      url: https://pypi.org/p/llm-webextract
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
@@ -152,7 +148,7 @@ jobs:
       run: |
         EXPECTED_VERSION="${{ needs.validate-release.outputs.version }}"
         PACKAGE_VERSION=$(python -c "import webextract; print(webextract.__version__)")
-        
+
         if [ "$PACKAGE_VERSION" != "$EXPECTED_VERSION" ]; then
           echo "❌ Version mismatch!"
           echo "   Tag/Input version: $EXPECTED_VERSION"
@@ -179,6 +175,7 @@ jobs:
       with:
         print-hash: true
         verbose: true
+        password: ${{ secrets.PYPI_API_TOKEN }}
 
     - name: Upload build artifacts
       uses: actions/upload-artifact@v4
@@ -200,14 +197,14 @@ jobs:
       id: changelog
       run: |
         VERSION="${{ needs.validate-release.outputs.version }}"
-        
+
         # Create changelog from git history if CHANGELOG.md doesn't exist or is empty
         if [ ! -f CHANGELOG.md ] || [ ! -s CHANGELOG.md ]; then
           echo "Generating changelog from git history..."
-          
+
           # Get previous tag
           PREV_TAG=$(git tag --sort=-version:refname | grep -v "^v$VERSION$" | head -1)
-          
+
           if [ -n "$PREV_TAG" ]; then
             CHANGELOG_CONTENT="## Changes since $PREV_TAG\n\n"
             git log --oneline --pretty=format:"- %s" $PREV_TAG..HEAD >> changelog_temp.md
@@ -215,16 +212,16 @@ jobs:
             CHANGELOG_CONTENT="## Changes in v$VERSION\n\n"
             git log --oneline --pretty=format:"- %s" >> changelog_temp.md
           fi
-          
+
           # Add the generated content
           echo -e "$CHANGELOG_CONTENT" > changelog_final.md
           cat changelog_temp.md >> changelog_final.md
-          
+
         else
           echo "Using existing CHANGELOG.md..."
           cp CHANGELOG.md changelog_final.md
         fi
-        
+
         # Set output for the release body
         {
           echo 'changelog<<EOF'
@@ -239,23 +236,23 @@ jobs:
         name: Release v${{ needs.validate-release.outputs.version }}
         body: |
           # 🚀 WebExtract v${{ needs.validate-release.outputs.version }}
-          
+
           ${{ steps.changelog.outputs.changelog }}
-          
+
           ## 📦 Installation
-          
+
           ```bash
           pip install llm-webextract==${{ needs.validate-release.outputs.version }}
           ```
-          
+
           ## 🔗 Links
-          
+
           - **PyPI Package**: https://pypi.org/project/llm-webextract/${{ needs.validate-release.outputs.version }}/
           - **Documentation**: https://github.com/HimashaHerath/webextract#readme
           - **Issues**: https://github.com/HimashaHerath/webextract/issues
-          
+
           ## 🙏 Support
-          
+
           If you find this release useful, please consider giving the project a ⭐!
         draft: false
         prerelease: ${{ needs.validate-release.outputs.is-prerelease == 'true' }}
