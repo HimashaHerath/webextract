@@ -12,7 +12,7 @@ Requirements:
 """
 
 import webextract
-from webextract import WebExtractor, ConfigBuilder, ConfigProfiles
+from webextract import ConfigBuilder, ConfigProfiles, WebExtractor
 
 
 def main():
@@ -45,7 +45,6 @@ def main():
     # Method 2: Using pre-configured profiles
     print(f"\n" + "=" * 50)
     print("📰 Using News Scraping Profile:")
-    
     try:
         news_extractor = WebExtractor(ConfigProfiles.news_scraping())
         result = news_extractor.extract(url)
@@ -53,7 +52,7 @@ def main():
         if result and result.is_successful:
             print("✅ Profile extraction successful!")
             print(f"🎯 Confidence: {result.confidence:.1%}")
-            
+
             # Access structured information
             info = result.structured_info
             if isinstance(info, dict):
@@ -61,11 +60,11 @@ def main():
                 print(f"   Title: {result.content.title}")
                 print(f"   Category: {info.get('category', 'Unknown')}")
                 print(f"   Sentiment: {info.get('sentiment', 'neutral')}")
-                
+
                 # Entities
-                entities = info.get('entities', {})
-                if entities.get('organizations'):
-                    orgs = entities['organizations'][:3]
+                entities = info.get("entities", {})
+                if entities.get("organizations"):
+                    orgs = entities["organizations"][:3]
                     print(f"   Organizations: {', '.join(orgs)}")
 
         else:
@@ -77,7 +76,7 @@ def main():
     # Method 3: Custom configuration
     print(f"\n" + "=" * 50)
     print("🔧 Using Custom Configuration:")
-    
+
     try:
         # Build custom configuration
         config = (
@@ -88,20 +87,20 @@ def main():
             .with_temperature(0.1)  # Low temperature for consistency
             .build()
         )
-        
+
         custom_extractor = WebExtractor(config)
         result = custom_extractor.extract(url)
-        
+
         if result and result.is_successful:
             print("✅ Custom extraction successful!")
             print(f"🎯 Confidence: {result.confidence:.1%}")
-            
+
             # Show confidence and quality indicators
             print(f"\n📊 Quality Metrics:")
             print(f"   High confidence: {result.has_high_confidence}")
             print(f"   Content length: {result.content.content_length:,} chars")
             print(f"   Links found: {len(result.content.links)}")
-            
+
         else:
             print("❌ Custom extraction failed")
 
@@ -111,21 +110,23 @@ def main():
     # Method 4: Cloud provider example (commented out - requires API key)
     print(f"\n" + "=" * 50)
     print("☁️ Cloud Provider Examples (commented out):")
-    print("""
+    print(
+        """
     # OpenAI Example:
     # result = webextract.extract_with_openai(
-    #     url, 
+    #     url,
     #     api_key="sk-your-openai-key",
     #     model="gpt-4o-mini"
     # )
-    
+
     # Anthropic Example:
     # result = webextract.extract_with_anthropic(
     #     url,
-    #     api_key="sk-ant-your-anthropic-key", 
+    #     api_key="sk-ant-your-anthropic-key",
     #     model="claude-3-5-sonnet-20241022"
     # )
-    """)
+    """
+    )
 
 
 if __name__ == "__main__":

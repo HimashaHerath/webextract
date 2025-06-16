@@ -11,8 +11,9 @@ Requirements:
 - Multiple models available (gemma3:27b, gemma3:8b, gemma3:2b, codellama:13b)
 """
 
-from webextract import WebExtractor, ConfigProfiles
 import time
+
+from webextract import ConfigProfiles, WebExtractor
 
 
 def test_profile(profile_name: str, extractor: WebExtractor, url: str) -> dict:
@@ -30,17 +31,11 @@ def test_profile(profile_name: str, extractor: WebExtractor, url: str) -> dict:
                 "success": True,
                 "time": extraction_time,
                 "confidence": result.confidence,
-                "content_length": (
-                    len(result.content.main_content) if result.content else 0
-                ),
+                "content_length": (len(result.content.main_content) if result.content else 0),
                 "structured_fields": (
-                    list(result.structured_info.keys())
-                    if result.structured_info
-                    else []
+                    list(result.structured_info.keys()) if result.structured_info else []
                 ),
-                "field_count": (
-                    len(result.structured_info) if result.structured_info else 0
-                ),
+                "field_count": (len(result.structured_info) if result.structured_info else 0),
                 "summary": (
                     result.structured_info.get("summary", "No summary")
                     if result.structured_info
@@ -97,9 +92,9 @@ def main():
             print(f"   ⏱️  Time: {result['time']:.1f}s")
             print(f"   🎯 Confidence: {result['confidence']:.1%}")
             print(f"   📊 Fields extracted: {result['field_count']}")
-            fields = result['structured_fields'][:5]
-            fields_str = ', '.join(fields)
-            ellipsis = '...' if len(result['structured_fields']) > 5 else ''
+            fields = result["structured_fields"][:5]
+            fields_str = ", ".join(fields)
+            ellipsis = "..." if len(result["structured_fields"]) > 5 else ""
             print(f"   🔤 Available fields: {fields_str}{ellipsis}")
 
             # Show a snippet of the summary
@@ -129,16 +124,12 @@ def main():
             print(f"   {i}. {result['profile']}: {result['time']:.1f}s")
 
         print(f"\n🎯 Confidence Ranking (highest to lowest):")
-        confidence_sorted = sorted(
-            successful_results, key=lambda x: x["confidence"], reverse=True
-        )
+        confidence_sorted = sorted(successful_results, key=lambda x: x["confidence"], reverse=True)
         for i, result in enumerate(confidence_sorted, 1):
             print(f"   {i}. {result['profile']}: {result['confidence']:.1%}")
 
         print(f"\n📋 Data Richness (most fields to least):")
-        fields_sorted = sorted(
-            successful_results, key=lambda x: x["field_count"], reverse=True
-        )
+        fields_sorted = sorted(successful_results, key=lambda x: x["field_count"], reverse=True)
         for i, result in enumerate(fields_sorted, 1):
             print(f"   {i}. {result['profile']}: {result['field_count']} fields")
 
@@ -198,10 +189,10 @@ def main():
         most_accurate = max(successful_results, key=lambda x: x["confidence"])
 
         print(f"\n⚖️  Speed vs Accuracy Trade-off:")
-        fastest_time = fastest['time']
-        fastest_conf = fastest['confidence']
-        accurate_time = most_accurate['time']
-        accurate_conf = most_accurate['confidence']
+        fastest_time = fastest["time"]
+        fastest_conf = fastest["confidence"]
+        accurate_time = most_accurate["time"]
+        accurate_conf = most_accurate["confidence"]
         print(
             f"   • Fastest: {fastest['profile']} "
             f"({fastest_time:.1f}s, {fastest_conf:.1%} confidence)"

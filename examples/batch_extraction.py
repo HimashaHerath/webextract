@@ -11,16 +11,15 @@ Requirements:
 - gemma3:27b model (or modify to use your available model)
 """
 
-from webextract import WebExtractor, ConfigBuilder, ConfigProfiles
-import time
 import json
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import List, Dict, Any
+from typing import Any, Dict, List
+
+from webextract import ConfigBuilder, ConfigProfiles, WebExtractor
 
 
-def extract_single_url(
-    extractor: WebExtractor, url: str, url_index: int
-) -> Dict[str, Any]:
+def extract_single_url(extractor: WebExtractor, url: str, url_index: int) -> Dict[str, Any]:
     """Extract data from a single URL with error handling"""
     try:
         print(f"🔍 [{url_index}] Processing: {url}")
@@ -37,9 +36,7 @@ def extract_single_url(
                 "extraction_time": extraction_time,
                 "confidence": result.confidence,
                 "title": result.content.title if result.content else "No title",
-                "content_length": (
-                    len(result.content.main_content) if result.content else 0
-                ),
+                "content_length": (len(result.content.main_content) if result.content else 0),
                 "structured_data": result.structured_info,
                 "error": None,
             }
@@ -91,14 +88,14 @@ def main():
         sequential_results.append(result)
 
         if result["success"]:
-            title_preview = result['title'][:50]
-            time_taken = result['extraction_time']
+            title_preview = result["title"][:50]
+            time_taken = result["extraction_time"]
             print(f"✅ [{i}] Success ({time_taken:.1f}s) - {title_preview}...")
         else:
             print(f"❌ [{i}] Failed: {result['error']}")
 
     total_sequential_time = time.time() - total_start_time
-    successful_count = len([r for r in sequential_results if r['success']])
+    successful_count = len([r for r in sequential_results if r["success"]])
     print(f"\n📊 Sequential Results: {successful_count}/{len(urls)} successful")
     print(f"⏱️  Total time: {total_sequential_time:.1f}s")
 
@@ -123,15 +120,15 @@ def main():
             parallel_results.append(result)
 
             if result["success"]:
-                idx = result['index']
-                time_taken = result['extraction_time']
-                title_preview = result['title'][:50]
+                idx = result["index"]
+                time_taken = result["extraction_time"]
+                title_preview = result["title"][:50]
                 print(f"✅ [{idx}] Success ({time_taken:.1f}s) - {title_preview}...")
             else:
                 print(f"❌ [{result['index']}] Failed: {result['error']}")
 
     total_parallel_time = time.time() - total_start_time
-    successful_count = len([r for r in parallel_results if r['success']])
+    successful_count = len([r for r in parallel_results if r["success"]])
     print(f"\n📊 Parallel Results: {successful_count}/{len(urls)} successful")
     print(f"⏱️  Total time: {total_parallel_time:.1f}s")
     speed_improvement = total_sequential_time / total_parallel_time
@@ -145,9 +142,7 @@ def main():
 
     if successful_results:
         # Calculate statistics
-        avg_confidence = sum(r["confidence"] for r in successful_results) / len(
-            successful_results
-        )
+        avg_confidence = sum(r["confidence"] for r in successful_results) / len(successful_results)
         total_content_len = sum(r["content_length"] for r in successful_results)
         avg_content_length = total_content_len / len(successful_results)
         total_content = sum(r["content_length"] for r in successful_results)
@@ -185,9 +180,7 @@ def main():
                 topic_counts[topic] = topic_counts.get(topic, 0) + 1
 
             print(f"\n🏷️  Common Topics:")
-            sorted_topics = sorted(
-                topic_counts.items(), key=lambda x: x[1], reverse=True
-            )[:5]
+            sorted_topics = sorted(topic_counts.items(), key=lambda x: x[1], reverse=True)[:5]
             for topic, count in sorted_topics:
                 print(f"   • {topic} ({count} mentions)")
 
@@ -198,9 +191,7 @@ def main():
                 org_counts[org] = org_counts.get(org, 0) + 1
 
             print(f"\n🏢 Organizations Mentioned:")
-            sorted_orgs = sorted(
-                org_counts.items(), key=lambda x: x[1], reverse=True
-            )[:5]
+            sorted_orgs = sorted(org_counts.items(), key=lambda x: x[1], reverse=True)[:5]
             for org, count in sorted_orgs:
                 print(f"   • {org} ({count} mentions)")
 
