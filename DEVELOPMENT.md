@@ -59,6 +59,77 @@ WIP             # Not descriptive
 asdf            # Meaningless
 ```
 
+## 🛠️ Development Setup
+
+### Prerequisites
+- Python 3.8+
+- Git
+- Node.js (for some development tools)
+
+### Installation
+```bash
+# Clone the repository
+git clone https://github.com/HimashaHerath/webextract.git
+cd webextract
+
+# Create virtual environment
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+
+# Install in development mode
+pip install -e ".[dev]"
+
+# Install Playwright browsers
+playwright install chromium
+
+# Install pre-commit hooks (RECOMMENDED)
+pip install pre-commit
+pre-commit install
+
+# Verify installation
+python -c "import webextract; print(f'WebExtract {webextract.__version__} installed!')"
+```
+
+### 🤖 Pre-commit Hooks Setup
+
+Pre-commit hooks automatically format and check your code before each commit:
+
+```bash
+# Install pre-commit (if not already installed)
+pip install pre-commit
+
+# Install the git hooks
+pre-commit install
+
+# Test the hooks on all files (optional)
+pre-commit run --all-files
+
+# Update hooks to latest versions
+pre-commit autoupdate
+```
+
+**What the hooks do:**
+- **Black**: Auto-formats Python code to consistent style
+- **isort**: Sorts and organizes imports  
+- **Flake8**: Checks for code quality issues
+- **Bandit**: Scans for security vulnerabilities
+- **General**: Fixes trailing whitespace, file endings, etc.
+
+**Benefits:**
+- ✅ No more CI failures due to formatting
+- ✅ Consistent code style across all contributors  
+- ✅ Catches issues before they reach GitHub
+- ✅ Saves time in code reviews
+
+**Skipping hooks (when needed):**
+```bash
+# Skip all hooks for emergency commits
+git commit --no-verify -m "emergency fix"
+
+# Skip specific hook
+SKIP=flake8 git commit -m "fix: urgent security patch"
+```
+
 ## 🏷️ Versioning and Tagging Strategy
 
 We use [Semantic Versioning (SemVer)](https://semver.org/) for version numbers: `MAJOR.MINOR.PATCH`
@@ -153,6 +224,7 @@ Before creating a release:
 
 - [ ] All tests pass (`python -m pytest`)
 - [ ] Code quality checks pass (`flake8`, `black`, `isort`)
+- [ ] Pre-commit hooks are installed and working
 - [ ] Documentation is updated
 - [ ] CHANGELOG.md is updated
 - [ ] Version number is bumped in `webextract/__init__.py`

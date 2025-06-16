@@ -50,6 +50,7 @@ dev = [
     "pylint",
     "safety",
     "bandit",
+    "pre-commit",
 ]
 openai = ["openai>=1.0.0"]
 anthropic = ["anthropic>=0.8.0"]
