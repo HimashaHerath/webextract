@@ -7,15 +7,7 @@ __description__ = "AI-powered web content extraction with Large Language Models"
 from .config.profiles import ConfigProfiles
 
 # Configuration imports
-from .config.settings import (
-    ConfigBuilder,
-    LLMConfig,
-    ScrapingConfig,
-    WebExtractConfig,
-)
-
-# Core imports
-from .core.extractor import DataExtractor as WebExtractor
+from .config.settings import ConfigBuilder, LLMConfig, ScrapingConfig, WebExtractConfig
 from .core.exceptions import (
     AuthenticationError,
     ConfigurationError,
@@ -24,6 +16,9 @@ from .core.exceptions import (
     ScrapingError,
     WebExtractError,
 )
+
+# Core imports
+from .core.extractor import DataExtractor as WebExtractor
 from .core.models import ExtractedContent, ExtractionConfig, StructuredData
 
 # Public API

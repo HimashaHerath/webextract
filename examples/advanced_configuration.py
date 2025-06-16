@@ -12,8 +12,9 @@ Requirements:
 - Multiple models available (gemma3:27b, gemma3:8b, etc.)
 """
 
-from webextract import WebExtractor, ConfigBuilder
 import time
+
+from webextract import ConfigBuilder, WebExtractor
 
 
 def main():
@@ -35,14 +36,14 @@ def main():
         .with_custom_prompt(
             """
             Analyze this technical article and extract:
-            
+
             1. TECHNICAL_DETAILS: Key technical concepts, tools, or technologies mentioned
             2. BENCHMARKS: Any performance metrics, scores, or comparisons
             3. COMPANIES: Organizations or companies mentioned
             4. TOOLS: Software tools, platforms, or services discussed
             5. SUMMARY: 2-sentence executive summary
             6. TARGET_AUDIENCE: Who this article is written for
-            
+
             Return as JSON with these exact field names.
             Make sure all fields are present, use empty arrays/strings if no data found.
             """
@@ -122,7 +123,7 @@ def main():
         .with_custom_prompt(
             """
             Perform a comprehensive analysis of this content. Extract:
-            
+
             - MAIN_TOPIC: Primary subject matter
             - KEY_POINTS: List of 3-5 most important points
             - TECHNICAL_TERMS: Technical vocabulary or jargon used
@@ -130,7 +131,7 @@ def main():
             - CONTENT_TYPE: Tutorial, News, Review, Analysis, etc.
             - ACTIONABLE_ITEMS: What readers should do after reading
             - RELATED_TOPICS: What else readers might be interested in
-            
+
             Be thorough and accurate. Return valid JSON.
             """
         )
