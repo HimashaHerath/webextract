@@ -91,9 +91,9 @@ def quick_extract(url: str, model: str = "llama3.2", **kwargs):
     """
     _load_imports()
     current_module = sys.modules[__name__]
-    ConfigBuilder = getattr(current_module, 'ConfigBuilder')  # noqa: F821
-    WebExtractor = getattr(current_module, 'WebExtractor')  # noqa: F821
-    
+    ConfigBuilder = getattr(current_module, "ConfigBuilder")  # noqa: F821
+    WebExtractor = getattr(current_module, "WebExtractor")  # noqa: F821
+
     config = ConfigBuilder().with_model(model).build()
     if kwargs:
         # Apply any additional config options
@@ -121,9 +121,9 @@ def extract_with_openai(url: str, api_key: str, model: str = "gpt-4", **kwargs):
     """
     _load_imports()
     current_module = sys.modules[__name__]
-    ConfigBuilder = getattr(current_module, 'ConfigBuilder')  # noqa: F821
-    WebExtractor = getattr(current_module, 'WebExtractor')  # noqa: F821
-    
+    ConfigBuilder = getattr(current_module, "ConfigBuilder")  # noqa: F821
+    WebExtractor = getattr(current_module, "WebExtractor")  # noqa: F821
+
     config = ConfigBuilder().with_openai(api_key, model).build()
     extractor = WebExtractor(config)
     return extractor.extract(url)
@@ -145,9 +145,9 @@ def extract_with_anthropic(
     """
     _load_imports()
     current_module = sys.modules[__name__]
-    ConfigBuilder = getattr(current_module, 'ConfigBuilder')  # noqa: F821
-    WebExtractor = getattr(current_module, 'WebExtractor')  # noqa: F821
-    
+    ConfigBuilder = getattr(current_module, "ConfigBuilder")  # noqa: F821
+    WebExtractor = getattr(current_module, "WebExtractor")  # noqa: F821
+
     config = ConfigBuilder().with_anthropic(api_key, model).build()
     extractor = WebExtractor(config)
     return extractor.extract(url)
