@@ -28,13 +28,13 @@ except FileNotFoundError:
 
 setup(
     name="llm-webextract",
-    version="1.1.1",
+    version="1.1.2",
     author="Himasha Herath",
-    author_email="himasha.herath@example.com",
+    author_email="himasha626@gmail.com",
     description="AI-powered web content extraction with Large Language Models",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/himasha-herath/llm-webextract",
+    url="https://github.com/HimashaHerath/webextract",
     packages=find_packages(),
     classifiers=[
         "Development Status :: 4 - Beta",
@@ -80,8 +80,8 @@ setup(
     },
     include_package_data=True,
     project_urls={
-        "Bug Reports": "https://github.com/adieyal/llm-scraper/issues",
-        "Source": "https://github.com/adieyal/llm-scraper",
+        "Bug Reports": "https://github.com/HimashaHerath/webextract/issues",
+        "Source": "https://github.com/HimashaHerath/webextract",
     },
     keywords="web scraping, llm, ai, content extraction, playwright, ollama, openai, anthropic",
 )

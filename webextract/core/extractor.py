@@ -6,7 +6,8 @@ from typing import Dict, List, Optional, Union
 from urllib.parse import urlparse
 
 from ..config.settings import WebExtractConfig
-from .llm_client import OllamaClient
+from .exceptions import ConfigurationError, ExtractionError, LLMError, ScrapingError
+from .llm_factory import create_llm_client
 from .models import ExtractedContent, ExtractionConfig, StructuredData
 from .scraper import WebScraper
 
@@ -33,7 +34,12 @@ class DataExtractor:
             self.config = config
             self.web_config = WebExtractConfig()
 
-        self.llm_client = OllamaClient(model_name=self.config.model_name)
+        # Create appropriate LLM client based on configuration
+        try:
+            self.llm_client = create_llm_client(self.web_config)
+        except (ConfigurationError, LLMError) as e:
+            logger.error(f"Failed to create LLM client: {e}")
+            raise e
         self._extraction_cache = {}  # Simple cache for repeated URLs
 
     def extract(
@@ -53,47 +59,63 @@ class DataExtractor:
         Returns:
             StructuredData object or None if extraction fails
         """
-        # Validate URL
-        if not self._validate_url(url):
-            logger.error(f"Invalid URL format: {url}")
-            return self._create_error_result(url, "Invalid URL format")
+        try:
+            # Validate URL
+            if not self._validate_url(url):
+                logger.error(f"Invalid URL format: {url}")
+                raise ExtractionError(f"Invalid URL format: {url}")
 
-        # Check cache unless force refresh
-        if not force_refresh and url in self._extraction_cache:
-            logger.info(f"Returning cached result for: {url}")
-            return self._extraction_cache[url]
+            # Check cache unless force refresh
+            if not force_refresh and url in self._extraction_cache:
+                logger.info(f"Returning cached result for: {url}")
+                return self._extraction_cache[url]
 
-        # Check model availability
-        if not self.llm_client.is_model_available():
-            logger.error(f"Model {self.config.model_name} is not available")
-            return self._create_error_result(url, f"Model {self.config.model_name} not available")
+            # Check model availability
+            try:
+                if not self.llm_client.is_model_available():
+                    raise LLMError(f"Model {self.web_config.llm.model_name} is not available")
+            except Exception as e:
+                logger.error(f"Failed to check model availability: {e}")
+                raise LLMError(f"Cannot verify model availability: {e}")
 
-        # Extract content
-        extracted_content = self._scrape_content(url)
-        if not extracted_content:
-            return self._create_error_result(url, "Failed to scrape content")
+            # Extract content
+            extracted_content = self._scrape_content(url)
+            if not extracted_content:
+                raise ScrapingError(f"Failed to scrape content from {url}")
 
-        # Process with LLM
-        structured_info = self._process_with_llm(extracted_content, schema)
+            # Process with LLM
+            try:
+                structured_info = self._process_with_llm(extracted_content, schema)
+            except LLMError:
+                raise
+            except Exception as e:
+                raise LLMError(f"LLM processing failed: {e}")
 
-        # Calculate confidence
-        confidence = self._calculate_confidence(extracted_content, structured_info)
+            # Calculate confidence
+            confidence = self._calculate_confidence(extracted_content, structured_info)
 
-        # Create result
-        result = StructuredData(
-            url=url,
-            extracted_at=datetime.now().isoformat(),
-            content=extracted_content,
-            structured_info=structured_info,
-            confidence=confidence,
-        )
+            # Create result
+            result = StructuredData(
+                url=url,
+                extracted_at=datetime.now().isoformat(),
+                content=extracted_content,
+                structured_info=structured_info,
+                confidence=confidence,
+            )
 
-        # Cache successful results
-        if confidence > 0.3:  # Only cache decent results
-            self._extraction_cache[url] = result
+            # Cache successful results
+            if confidence > 0.3:  # Only cache decent results
+                self._extraction_cache[url] = result
 
-        logger.info(f"Extraction completed for {url} with confidence: {confidence:.2f}")
-        return result
+            logger.info(f"Extraction completed for {url} with confidence: {confidence:.2f}")
+            return result
+
+        except (ExtractionError, ScrapingError, LLMError, ConfigurationError) as e:
+            logger.error(f"Extraction failed for {url}: {e}")
+            return self._create_error_result(url, str(e))
+        except Exception as e:
+            logger.error(f"Unexpected error during extraction for {url}: {e}")
+            return self._create_error_result(url, f"Unexpected error: {e}")
 
     def extract_batch(
         self,
@@ -155,7 +177,8 @@ class DataExtractor:
         try:
             parsed = urlparse(url)
             return bool(parsed.scheme and parsed.netloc)
-        except Exception:
+        except Exception as e:
+            logger.error(f"URL validation failed for {url}: {e}")
             return False
 
     def _scrape_content(self, url: str) -> Optional[ExtractedContent]:
@@ -171,9 +194,11 @@ class DataExtractor:
 
                 return content
 
+        except ScrapingError:
+            raise
         except Exception as e:
             logger.error(f"Scraping failed for {url}: {e}")
-            return None
+            raise ScrapingError(f"Web scraping failed for {url}: {e}")
 
     def _process_with_llm(
         self, content: ExtractedContent, schema: Optional[Dict[str, str]] = None
@@ -192,17 +217,11 @@ class DataExtractor:
                     content=llm_content, custom_prompt=self.config.custom_prompt
                 )
 
+        except LLMError:
+            raise
         except Exception as e:
             logger.error(f"LLM processing failed: {e}")
-            return {
-                "error": f"LLM processing failed: {str(e)}",
-                "summary": (
-                    content.main_content[:200] + "..."
-                    if len(content.main_content) > 200
-                    else content.main_content
-                ),
-                "extraction_error": True,
-            }
+            raise LLMError(f"LLM processing failed: {e}")
 
     def _prepare_content_for_llm(self, content: ExtractedContent) -> str:
         """Prepare content for LLM processing."""

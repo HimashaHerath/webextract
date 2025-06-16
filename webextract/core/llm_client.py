@@ -1,107 +1,78 @@
-"""Ollama LLM client for processing extracted content."""
+"""Base LLM client and Ollama implementation for processing extracted content."""
 
 import json
 import logging
 import re
+from abc import ABC, abstractmethod
 from typing import Any, Dict, Optional
 
 import ollama
 
 from ..config.settings import settings
+from .exceptions import LLMError, ModelNotAvailableError
 
 logger = logging.getLogger(__name__)
 
 
-class OllamaClient:
-    """Client for interacting with local Ollama LLM."""
+class BaseLLMClient(ABC):
+    """Abstract base class for LLM clients."""
 
-    def __init__(self, model_name: str = None):
-        self.model_name = model_name or settings.DEFAULT_MODEL
-        self.client = ollama.Client(host=settings.OLLAMA_BASE_URL)
+    def __init__(self, model_name: str):
+        self.model_name = model_name
         self.max_content_length = settings.MAX_CONTENT_LENGTH
 
+    @abstractmethod
     def is_model_available(self) -> bool:
         """Check if the specified model is available."""
-        try:
-            models = self.client.list()
-            available_models = [model["name"] for model in models["models"]]
-            return self.model_name in available_models
-        except Exception as e:
-            logger.error(f"Failed to check model availability: {e}")
-            return False
+        pass
 
+    @abstractmethod
     def generate_structured_data(
         self, content: str, custom_prompt: str = None, schema: Dict[str, Any] = None
     ) -> Dict[str, Any]:
-        """Generate structured data from content using LLM with improved JSON handling."""
+        """Generate structured data from content."""
+        pass
 
-        # Use schema if provided, otherwise use default
-        if schema:
-            prompt = self._create_schema_prompt(schema)
-        else:
-            prompt = custom_prompt or self._get_improved_prompt()
+    @abstractmethod
+    def summarize_content(self, content: str, max_length: int = 200) -> str:
+        """Generate a brief summary of the content."""
+        pass
 
-        # Truncate content if needed
-        truncated_content = content[: self.max_content_length]
-        if len(content) > self.max_content_length:
-            logger.info(
-                f"Content truncated from {len(content)} to {self.max_content_length} characters"
-            )
+    def extract_with_schema(self, content: str, schema: Dict[str, Any]) -> Dict[str, Any]:
+        """Extract data according to a specific schema."""
+        return self.generate_structured_data(content, schema=schema)
 
-        full_prompt = f"""Analyze the following content and return ONLY a valid JSON object.
+    def _get_improved_prompt(self) -> str:
+        """Get improved default prompt for better JSON generation."""
+        return """Extract the following information from the content:
 
-CONTENT TO ANALYZE:
-{truncated_content}
+{
+  "summary": "A clear, concise summary of the main points (required, 2-3 sentences)",
+  "topics": ["array of main topics or themes discussed"],
+  "category": "primary category (technology/business/news/education/"
+              "entertainment/other)",
+  "sentiment": "overall tone (positive/negative/neutral)",
+  "entities": {
+    "people": ["array of person names mentioned"],
+    "organizations": ["array of organization/company names"],
+    "locations": ["array of locations/places mentioned"]
+  },
+  "key_facts": ["array of important facts or claims"],
+  "important_dates": ["array of dates mentioned with context"],
+  "statistics": ["array of numbers, percentages, or metrics mentioned"]
+}
 
-EXTRACTION INSTRUCTIONS:
-{prompt}
+Return this EXACT structure with these EXACT field names.
+ALL fields must be present. Use empty arrays [] if no data found."""
 
-CRITICAL RULES:
-1. Return ONLY the JSON object - no explanatory text before or after
-2. Start with {{ and end with }}
-3. Use double quotes for ALL strings (no single quotes)
-4. Ensure all required fields are present
-5. Use empty arrays [] for missing list data
-6. Use empty strings "" for missing text data
-7. Escape any quotes inside string values with \\"""
+    def _create_schema_prompt(self, schema: Dict[str, Any]) -> str:
+        """Create a prompt from a provided schema."""
+        return f"""Extract information according to this schema:
 
-        for attempt in range(settings.LLM_RETRY_ATTEMPTS):
-            try:
-                logger.info(f"LLM generation attempt {attempt + 1}/{settings.LLM_RETRY_ATTEMPTS}")
+{json.dumps(schema, indent=2)}
 
-                response = self.client.generate(
-                    model=self.model_name,
-                    prompt=full_prompt,
-                    options={
-                        "temperature": settings.LLM_TEMPERATURE,
-                        "num_predict": settings.MAX_TOKENS,
-                        "format": "json",  # Request JSON format if model supports it
-                    },
-                )
-
-                response_text = response.get("response", "").strip()
-                logger.debug(f"LLM response length: {len(response_text)} characters")
-
-                # Try to parse the response
-                result = self._parse_json_response(response_text)
-
-                if result and self._validate_extraction_result(result, schema):
-                    logger.info(
-                        f"Successfully extracted valid structured data on attempt {attempt + 1}"
-                    )
-                    return result
-
-                # If validation failed, try once more with stricter prompt
-                if attempt == 0:
-                    logger.warning("First attempt failed validation, trying with stricter prompt")
-                    continue
-
-            except Exception as e:
-                logger.error(f"LLM generation failed (attempt {attempt + 1}): {e}")
-                if attempt == settings.LLM_RETRY_ATTEMPTS - 1:
-                    return self._create_safe_fallback(content[:200])
-
-        return self._create_safe_fallback(content[:200])
+Return data matching this EXACT structure with ALL fields present.
+Use appropriate empty values (empty strings, empty arrays) for missing data."""
 
     def _parse_json_response(self, response_text: str) -> Optional[Dict[str, Any]]:
         """Parse JSON from LLM response with multiple strategies."""
@@ -165,38 +136,6 @@ CRITICAL RULES:
         json_text = re.sub(r'"([^"\\]*(?:\\.[^"\\]*)*)"', fix_string_newlines, json_text)
 
         return json_text
-
-    def _get_improved_prompt(self) -> str:
-        """Get improved default prompt for better JSON generation."""
-        return """Extract the following information from the content:
-
-{
-  "summary": "A clear, concise summary of the main points (required, 2-3 sentences)",
-  "topics": ["array of main topics or themes discussed"],
-  "category": "primary category (technology/business/news/education/"
-              "entertainment/other)",
-  "sentiment": "overall tone (positive/negative/neutral)",
-  "entities": {
-    "people": ["array of person names mentioned"],
-    "organizations": ["array of organization/company names"],
-    "locations": ["array of locations/places mentioned"]
-  },
-  "key_facts": ["array of important facts or claims"],
-  "important_dates": ["array of dates mentioned with context"],
-  "statistics": ["array of numbers, percentages, or metrics mentioned"]
-}
-
-Return this EXACT structure with these EXACT field names.
-ALL fields must be present. Use empty arrays [] if no data found."""
-
-    def _create_schema_prompt(self, schema: Dict[str, Any]) -> str:
-        """Create a prompt from a provided schema."""
-        return f"""Extract information according to this schema:
-
-{json.dumps(schema, indent=2)}
-
-Return data matching this EXACT structure with ALL fields present.
-Use appropriate empty values (empty strings, empty arrays) for missing data."""
 
     def _validate_extraction_result(
         self, result: Dict[str, Any], schema: Optional[Dict[str, Any]] = None
@@ -272,14 +211,112 @@ Use appropriate empty values (empty strings, empty arrays) for missing data."""
             "extraction_error": True,
         }
 
-    def extract_with_schema(self, content: str, schema: Dict[str, Any]) -> Dict[str, Any]:
-        """Extract data according to a specific schema."""
-        return self.generate_structured_data(content, schema=schema)
+
+class OllamaClient(BaseLLMClient):
+    """Client for interacting with local Ollama LLM."""
+
+    def __init__(self, model_name: str = None, base_url: str = None):
+        super().__init__(model_name or settings.DEFAULT_MODEL)
+        self.base_url = base_url or settings.OLLAMA_BASE_URL
+        try:
+            self.client = ollama.Client(host=self.base_url)
+        except Exception as e:
+            raise LLMError(f"Failed to initialize Ollama client: {e}")
+
+    def is_model_available(self) -> bool:
+        """Check if the specified model is available."""
+        try:
+            models = self.client.list()
+            available_models = [model["name"] for model in models["models"]]
+            return self.model_name in available_models
+        except Exception as e:
+            logger.error(f"Failed to check Ollama model availability: {e}")
+            return False
+
+    def generate_structured_data(
+        self, content: str, custom_prompt: str = None, schema: Dict[str, Any] = None
+    ) -> Dict[str, Any]:
+        """Generate structured data from content using Ollama with improved JSON handling."""
+        try:
+            # Use schema if provided, otherwise use default
+            if schema:
+                prompt = self._create_schema_prompt(schema)
+            else:
+                prompt = custom_prompt or self._get_improved_prompt()
+
+            # Truncate content if needed
+            truncated_content = content[: self.max_content_length]
+            if len(content) > self.max_content_length:
+                logger.info(
+                    f"Content truncated from {len(content)} to {self.max_content_length} characters"
+                )
+
+            full_prompt = f"""Analyze the following content and return ONLY a valid JSON object.
+
+CONTENT TO ANALYZE:
+{truncated_content}
+
+EXTRACTION INSTRUCTIONS:
+{prompt}
+
+CRITICAL RULES:
+1. Return ONLY the JSON object - no explanatory text before or after
+2. Start with {{ and end with }}
+3. Use double quotes for ALL strings (no single quotes)
+4. Ensure all required fields are present
+5. Use empty arrays [] for missing list data
+6. Use empty strings "" for missing text data
+7. Escape any quotes inside string values with \\"""
+
+            for attempt in range(settings.LLM_RETRY_ATTEMPTS):
+                try:
+                    logger.info(f"Ollama generation attempt {attempt + 1}/{settings.LLM_RETRY_ATTEMPTS}")
+
+                    response = self.client.generate(
+                        model=self.model_name,
+                        prompt=full_prompt,
+                        options={
+                            "temperature": settings.LLM_TEMPERATURE,
+                            "num_predict": settings.MAX_TOKENS,
+                            "format": "json",  # Request JSON format if model supports it
+                        },
+                    )
+
+                    response_text = response.get("response", "").strip()
+                    logger.debug(f"Ollama response length: {len(response_text)} characters")
+
+                    # Try to parse the response
+                    result = self._parse_json_response(response_text)
+
+                    if result and self._validate_extraction_result(result, schema):
+                        logger.info(
+                            f"Successfully extracted valid structured data on attempt {attempt + 1}"
+                        )
+                        return result
+
+                    # If validation failed, try once more with stricter prompt
+                    if attempt == 0:
+                        logger.warning("First attempt failed validation, trying with stricter prompt")
+                        continue
+
+                except Exception as e:
+                    logger.error(f"Ollama generation failed (attempt {attempt + 1}): {e}")
+                    if "connection" in str(e).lower():
+                        raise LLMError(f"Cannot connect to Ollama server at {self.base_url}: {e}")
+                    if attempt == settings.LLM_RETRY_ATTEMPTS - 1:
+                        raise LLMError(f"Ollama processing failed after {settings.LLM_RETRY_ATTEMPTS} attempts: {e}")
+
+            # Fallback if all attempts failed but no exception was raised
+            return self._create_safe_fallback(content[:200])
+
+        except LLMError:
+            raise
+        except Exception as e:
+            raise LLMError(f"Unexpected error in Ollama processing: {e}")
 
     def summarize_content(self, content: str, max_length: int = 200) -> str:
-        """Generate a brief summary of the content."""
-        prompt = f"""Provide a clear, concise summary of this content in no more than \
-{max_length} characters.
+        """Generate a brief summary of the content using Ollama."""
+        prompt = f"""Provide a clear, concise summary of this content in no more than {max_length} characters.
 Focus on the main points and key takeaways.
 
 Content: {content[:2000]}
@@ -305,6 +342,6 @@ Summary (max {max_length} chars):"""
             return summary
 
         except Exception as e:
-            logger.error(f"Failed to generate summary: {e}")
+            logger.error(f"Failed to generate Ollama summary: {e}")
             preview = content[: max_length - 3] + "..." if len(content) > max_length else content
             return preview

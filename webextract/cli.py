@@ -203,7 +203,18 @@ def display_pretty_output(result):
         structured_table.add_column("Field", style="cyan")
         structured_table.add_column("Value", style="white")
 
-        for key, value in result.structured_info.items():
+        # Handle both dictionary and Pydantic model formats
+        if hasattr(result.structured_info, 'model_dump'):
+            # It's a Pydantic model
+            structured_dict = result.structured_info.model_dump()
+        elif isinstance(result.structured_info, dict):
+            # It's already a dictionary
+            structured_dict = result.structured_info
+        else:
+            # Fallback: try to convert to dict
+            structured_dict = dict(result.structured_info)
+
+        for key, value in structured_dict.items():
             if isinstance(value, (list, dict)):
                 value_str = (
                     json.dumps(value, indent=2)[:200] + "..."

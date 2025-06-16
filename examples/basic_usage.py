@@ -7,82 +7,122 @@ This example shows the simplest way to extract structured data from web pages.
 Perfect for getting started with the library.
 
 Requirements:
-- Ollama running locally
-- gemma3:27b model (or modify to use your available model)
+- Ollama running locally with llama3.2 model (or modify to use your available model)
+- OR OpenAI/Anthropic API key
 """
 
-from webextract import WebExtractor, ConfigProfiles
+import webextract
+from webextract import WebExtractor, ConfigBuilder, ConfigProfiles
 
 
 def main():
     print("🚀 WebExtract - Basic Usage Example")
     print("=" * 50)
 
-    # Method 1: Use a pre-configured profile (easiest)
-    print("\n📰 Using News Scraping Profile:")
-    news_extractor = WebExtractor(ConfigProfiles.news_scraping())
-
-    # Test URL
-    url = "https://dev.to/nodeshiftcloud/claude-4-opus-vs-sonnet-benchmarks-and-dev-workflow-with-claude-code-11fa"
-
+    # Method 1: Quick extraction (simplest)
+    print("\n⚡ Quick Extraction:")
+    url = "https://techcrunch.com/2024/01/15/ai-industry-trends/"
+    
     try:
         print(f"🔍 Extracting from: {url}")
-        result = news_extractor.extract(url)
-
-        if result:
-            print("✅ Extraction successful!")
+        result = webextract.quick_extract(url)  # Uses Ollama by default
+        
+        if result and result.is_successful:
+            print("✅ Quick extraction successful!")
             print(f"🎯 Confidence: {result.confidence:.1%}")
-
-            # Basic information
-            print(f"\n📄 Basic Info:")
-            print(f"   Title: {result.content.title}")
-            print(f"   Content length: {len(result.content.main_content)} characters")
-
-            # LLM extracted data
-            if result.structured_info:
-                info = result.structured_info
-
-                if "summary" in info:
-                    print(f"\n📝 Summary:")
-                    print(f"   {info['summary']}")
-
-                if "organizations" in info and info["organizations"]:
-                    print(f"\n🏢 Organizations: {', '.join(info['organizations'])}")
-
+            print(f"📝 Summary: {result.get_summary()[:150]}...")
+            print(f"🏷️ Topics: {', '.join(result.get_topics()[:3])}")
         else:
-            print("❌ Extraction failed")
-
+            print("❌ Quick extraction failed")
+            
     except Exception as e:
         print(f"❌ Error: {e}")
         print("\n💡 Troubleshooting:")
         print("   1. Make sure Ollama is running: ollama serve")
         print("   2. Check available models: ollama list")
-        print("   3. Pull required model: ollama pull gemma3:27b")
+        print("   3. Pull required model: ollama pull llama3.2")
 
-    # Method 2: Simple default configuration
+    # Method 2: Using pre-configured profiles
     print(f"\n" + "=" * 50)
-    print("🔧 Using Default Configuration:")
-
-    default_extractor = WebExtractor()  # Uses all defaults
-
+    print("📰 Using News Scraping Profile:")
+    
     try:
-        result = default_extractor.extract(url)
-        if result:
-            print("✅ Default extraction successful!")
+        news_extractor = WebExtractor(ConfigProfiles.news_scraping())
+        result = news_extractor.extract(url)
+
+        if result and result.is_successful:
+            print("✅ Profile extraction successful!")
             print(f"🎯 Confidence: {result.confidence:.1%}")
-
-            if result.structured_info and "summary" in result.structured_info:
-                summary = (
-                    result.structured_info["summary"][:150] + "..."
-                    if len(result.structured_info["summary"]) > 150
-                    else result.structured_info["summary"]
-                )
-                print(f"📝 Summary: {summary}")
+            
+            # Access structured information
+            info = result.structured_info
+            if isinstance(info, dict):
+                print(f"\n📄 Article Details:")
+                print(f"   Title: {result.content.title}")
+                print(f"   Category: {info.get('category', 'Unknown')}")
+                print(f"   Sentiment: {info.get('sentiment', 'neutral')}")
+                
+                # Entities
+                entities = info.get('entities', {})
+                if entities.get('organizations'):
+                    print(f"   Organizations: {', '.join(entities['organizations'][:3])}")
+                    
         else:
-            print("❌ Default extraction failed")
-
+            print("❌ Profile extraction failed")
+            
     except Exception as e:
-        print(f"❌ Error with default config: {e}")
+        print(f"❌ Error with profile: {e}")
+
+    # Method 3: Custom configuration
+    print(f"\n" + "=" * 50)
+    print("🔧 Using Custom Configuration:")
+    
+    try:
+        # Build custom configuration
+        config = (ConfigBuilder()
+                 .with_ollama("llama3.2")  # Specify model
+                 .with_timeout(45)         # Custom timeout
+                 .with_content_limit(8000) # Content limit
+                 .with_temperature(0.1)    # Low temperature for consistency
+                 .build())
+        
+        custom_extractor = WebExtractor(config)
+        result = custom_extractor.extract(url)
+        
+        if result and result.is_successful:
+            print("✅ Custom extraction successful!")
+            print(f"🎯 Confidence: {result.confidence:.1%}")
+            
+            # Show confidence and quality indicators
+            print(f"\n📊 Quality Metrics:")
+            print(f"   High confidence: {result.has_high_confidence}")
+            print(f"   Content length: {result.content.content_length:,} chars")
+            print(f"   Links found: {len(result.content.links)}")
+            
+        else:
+            print("❌ Custom extraction failed")
+            
+    except Exception as e:
+        print(f"❌ Error with custom config: {e}")
+
+    # Method 4: Cloud provider example (commented out - requires API key)
+    print(f"\n" + "=" * 50)
+    print("☁️ Cloud Provider Examples (commented out):")
+    print("""
+    # OpenAI Example:
+    # result = webextract.extract_with_openai(
+    #     url, 
+    #     api_key="sk-your-openai-key",
+    #     model="gpt-4o-mini"
+    # )
+    
+    # Anthropic Example:
+    # result = webextract.extract_with_anthropic(
+    #     url,
+    #     api_key="sk-ant-your-anthropic-key", 
+    #     model="claude-3-5-sonnet-20241022"
+    # )
+    """)
 
 
 if __name__ == "__main__":

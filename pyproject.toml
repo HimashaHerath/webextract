@@ -9,7 +9,7 @@ description = "AI-powered web content extraction with Large Language Models"
 readme = "README.md"
 license = {text = "MIT"}
 authors = [
-    {name = "Himasha Herath", email = "himasha.herath@example.com"}
+    {name = "Himasha Herath", email = "himasha626@gmail.com"}
 ]
 keywords = ["web scraping", "llm", "ai", "content extraction", "playwright", "ollama", "openai", "anthropic"]
 classifiers = [

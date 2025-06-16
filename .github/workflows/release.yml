@@ -4,98 +4,260 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g., v1.1.2)'
+        required: true
+        type: string
+
+env:
+  PYTHON_VERSION: "3.11"
 
 permissions:
   contents: write
   packages: write
-  pull-requests: read
+  id-token: write  # for trusted publishing to PyPI
 
 jobs:
+  validate-release:
+    name: Validate Release
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.get-version.outputs.version }}
+      is-prerelease: ${{ steps.get-version.outputs.is-prerelease }}
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Get version from tag or input
+      id: get-version
+      run: |
+        if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          VERSION="${{ github.event.inputs.version }}"
+        else
+          VERSION="${{ github.ref_name }}"
+        fi
+        
+        # Remove 'v' prefix if present
+        VERSION=${VERSION#v}
+        
+        # Check if it's a prerelease (contains alpha, beta, rc)
+        if [[ "$VERSION" =~ (alpha|beta|rc) ]]; then
+          IS_PRERELEASE=true
+        else
+          IS_PRERELEASE=false
+        fi
+        
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+        echo "is-prerelease=$IS_PRERELEASE" >> $GITHUB_OUTPUT
+        echo "Release version: $VERSION (prerelease: $IS_PRERELEASE)"
+
+    - name: Validate version format
+      run: |
+        if [[ ! "${{ steps.get-version.outputs.version }}" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9]+)?$ ]]; then
+          echo "❌ Invalid version format: ${{ steps.get-version.outputs.version }}"
+          echo "Expected format: X.Y.Z or X.Y.Z-suffix"
+          exit 1
+        fi
+        echo "✅ Version format is valid"
+
   test:
+    name: Test Python ${{ matrix.python-version }}
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         python-version: ["3.8", "3.11", "3.12"]
 
     steps:
-    - uses: actions/checkout@v4
+    - name: Checkout code
+      uses: actions/checkout@v4
 
     - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
         python-version: ${{ matrix.python-version }}
+
+    - name: Cache pip dependencies
+      uses: actions/cache@v4
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ matrix.python-version }}-${{ hashFiles('**/pyproject.toml') }}
+
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y xvfb
 
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
         pip install -e .[dev]
-        playwright install chromium
-        # Verify installation
-        python -c "import webextract; print('✅ Package imported successfully')"
+        playwright install chromium --with-deps
+
+    - name: Verify installation
+      run: |
+        python -c "import webextract; print(f'✅ WebExtract {webextract.__version__} imported successfully')"
 
     - name: Run tests
       run: |
-        xvfb-run -a pytest tests/ -v
-      if: always()
+        xvfb-run -a pytest tests/ -v --tb=short
 
-  build-and-publish:
-    needs: test
+  code-quality:
+    name: Code Quality Check
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+    - name: Checkout code
+      uses: actions/checkout@v4
 
     - name: Set up Python
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
-        python-version: "3.11"
+        python-version: ${{ env.PYTHON_VERSION }}
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install black isort flake8
+
+    - name: Check formatting and linting
+      run: |
+        black --check webextract/ examples/
+        isort --check-only webextract/ examples/
+        flake8 webextract/ --config .flake8
+
+  build-and-publish:
+    name: Build and Publish
+    needs: [validate-release, test, code-quality]
+    runs-on: ubuntu-latest
+    environment: 
+      name: pypi
+      url: https://pypi.org/p/llm-webextract
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
 
     - name: Install build dependencies
       run: |
         python -m pip install --upgrade pip
         pip install build twine
 
+    - name: Verify version consistency
+      run: |
+        EXPECTED_VERSION="${{ needs.validate-release.outputs.version }}"
+        PACKAGE_VERSION=$(python -c "import webextract; print(webextract.__version__)")
+        
+        if [ "$PACKAGE_VERSION" != "$EXPECTED_VERSION" ]; then
+          echo "❌ Version mismatch!"
+          echo "   Tag/Input version: $EXPECTED_VERSION"
+          echo "   Package version:   $PACKAGE_VERSION"
+          exit 1
+        fi
+        echo "✅ Version consistency verified: $PACKAGE_VERSION"
+
     - name: Build package
       run: |
+        echo "::group::Building package"
         python -m build
+        echo "::endgroup::"
 
-    - name: Check package
+    - name: Verify package
       run: |
+        echo "::group::Package verification"
         twine check dist/*
+        ls -la dist/
+        echo "::endgroup::"
 
     - name: Publish to PyPI
-      env:
-        TWINE_USERNAME: __token__
-        TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
-      run: |
-        twine upload dist/*
-
-  create-release:
-    needs: build-and-publish
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      packages: write
-    steps:
-    - uses: actions/checkout@v4
-
-    - name: Create Release
-      uses: softprops/action-gh-release@v1
+      uses: pypa/gh-action-pypi-publish@release/v1
       with:
-        tag_name: ${{ github.ref_name }}
-        name: Release ${{ github.ref_name }}
+        print-hash: true
+        verbose: true
+
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: dist-release-${{ needs.validate-release.outputs.version }}
+        path: dist/
+
+  create-github-release:
+    name: Create GitHub Release
+    needs: [validate-release, build-and-publish]
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Need full history for changelog
+
+    - name: Generate changelog
+      id: changelog
+      run: |
+        VERSION="${{ needs.validate-release.outputs.version }}"
+        
+        # Create changelog from git history if CHANGELOG.md doesn't exist or is empty
+        if [ ! -f CHANGELOG.md ] || [ ! -s CHANGELOG.md ]; then
+          echo "Generating changelog from git history..."
+          
+          # Get previous tag
+          PREV_TAG=$(git tag --sort=-version:refname | grep -v "^v$VERSION$" | head -1)
+          
+          if [ -n "$PREV_TAG" ]; then
+            CHANGELOG_CONTENT="## Changes since $PREV_TAG\n\n"
+            git log --oneline --pretty=format:"- %s" $PREV_TAG..HEAD >> changelog_temp.md
+          else
+            CHANGELOG_CONTENT="## Changes in v$VERSION\n\n"
+            git log --oneline --pretty=format:"- %s" >> changelog_temp.md
+          fi
+          
+          # Add the generated content
+          echo -e "$CHANGELOG_CONTENT" > changelog_final.md
+          cat changelog_temp.md >> changelog_final.md
+          
+        else
+          echo "Using existing CHANGELOG.md..."
+          cp CHANGELOG.md changelog_final.md
+        fi
+        
+        # Set output for the release body
+        {
+          echo 'changelog<<EOF'
+          cat changelog_final.md
+          echo 'EOF'
+        } >> $GITHUB_OUTPUT
+
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: v${{ needs.validate-release.outputs.version }}
+        name: Release v${{ needs.validate-release.outputs.version }}
         body: |
-          ## Changes in ${{ github.ref_name }}
+          # 🚀 WebExtract v${{ needs.validate-release.outputs.version }}
           
-          See [CHANGELOG.md](CHANGELOG.md) for detailed changes.
+          ${{ steps.changelog.outputs.changelog }}
           
-          ## Installation
+          ## 📦 Installation
           
           ```bash
-          pip install llm-webextract==${{ github.ref_name }}
+          pip install llm-webextract==${{ needs.validate-release.outputs.version }}
           ```
           
-          ## PyPI Package
+          ## 🔗 Links
           
-          https://pypi.org/project/llm-webextract/${{ github.ref_name }}/
+          - **PyPI Package**: https://pypi.org/project/llm-webextract/${{ needs.validate-release.outputs.version }}/
+          - **Documentation**: https://github.com/HimashaHerath/webextract#readme
+          - **Issues**: https://github.com/HimashaHerath/webextract/issues
+          
+          ## 🙏 Support
+          
+          If you find this release useful, please consider giving the project a ⭐!
         draft: false
-        prerelease: false 
+        prerelease: ${{ needs.validate-release.outputs.is-prerelease == 'true' }}
+        generate_release_notes: true
+        make_latest: ${{ needs.validate-release.outputs.is-prerelease == 'false' }}

@@ -6,16 +6,27 @@ on:
   pull_request:
     branches: [ main ]
 
+env:
+  PYTHON_VERSION: "3.11"
+
 jobs:
   format-check:
+    name: Format Check
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+    - name: Checkout code
+      uses: actions/checkout@v4
 
     - name: Set up Python
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
-        python-version: "3.11"
+        python-version: ${{ env.PYTHON_VERSION }}
+
+    - name: Cache pip dependencies
+      uses: actions/cache@v4
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-format-${{ hashFiles('**/pyproject.toml') }}
 
     - name: Install formatting tools
       run: |
@@ -24,57 +35,79 @@ jobs:
 
     - name: Check code formatting with black
       run: |
-        black --check --diff webextract/ examples/ || echo "Code formatting issues found"
-      continue-on-error: true
+        echo "::group::Black formatting check"
+        black --check --diff webextract/ examples/ tests/
+        echo "::endgroup::"
 
     - name: Check import sorting with isort
       run: |
-        isort --check-only --diff webextract/ examples/ || echo "Import sorting issues found"
-      continue-on-error: true
+        echo "::group::Import sorting check"
+        isort --check-only --diff webextract/ examples/ tests/
+        echo "::endgroup::"
 
   lint:
+    name: Lint Analysis
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+    - name: Checkout code
+      uses: actions/checkout@v4
 
     - name: Set up Python
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
-        python-version: "3.11"
+        python-version: ${{ env.PYTHON_VERSION }}
+
+    - name: Cache pip dependencies
+      uses: actions/cache@v4
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-lint-${{ hashFiles('**/pyproject.toml') }}
 
     - name: Install linting tools
       run: |
         python -m pip install --upgrade pip
-        pip install flake8 pylint mypy
+        pip install flake8 mypy
 
     - name: Lint with flake8
       run: |
-        flake8 webextract/ --max-line-length=127 --extend-ignore=E203,W503 || echo "Flake8 issues found"
-      continue-on-error: true
-
-    - name: Lint with pylint
-      continue-on-error: true
-      run: |
-        pylint webextract/ --disable=C,R --errors-only || echo "Pylint issues found"
+        echo "::group::Flake8 linting"
+        flake8 webextract/ --config .flake8 --tee --output-file=flake8-report.txt
+        echo "::endgroup::"
 
     - name: Type check with mypy
       continue-on-error: true
       run: |
-        mypy webextract/ --ignore-missing-imports --no-strict-optional || echo "MyPy issues found"
+        echo "::group::MyPy type checking"
+        mypy webextract/ --ignore-missing-imports --no-strict-optional --txt-report mypy-report
+        echo "::endgroup::"
+
+    - name: Upload lint reports
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: lint-reports
+        path: |
+          flake8-report.txt
+          mypy-report/
 
   auto-format:
+    name: Auto-format Code
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request'
+    permissions:
+      contents: write
+      pull-requests: write
     steps:
-    - uses: actions/checkout@v4
+    - name: Checkout code
+      uses: actions/checkout@v4
       with:
         token: ${{ secrets.GITHUB_TOKEN }}
         ref: ${{ github.head_ref }}
 
     - name: Set up Python
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
-        python-version: "3.11"
+        python-version: ${{ env.PYTHON_VERSION }}
 
     - name: Install formatting tools
       run: |
@@ -83,16 +116,42 @@ jobs:
 
     - name: Format code with black
       run: |
-        black webextract/ examples/
+        black webextract/ examples/ tests/
 
     - name: Sort imports with isort
       run: |
-        isort webextract/ examples/
+        isort webextract/ examples/ tests/
+
+    - name: Check for changes
+      id: verify-changed-files
+      run: |
+        if [ -n "$(git status --porcelain)" ]; then
+          echo "changed=true" >> $GITHUB_OUTPUT
+        else
+          echo "changed=false" >> $GITHUB_OUTPUT
+        fi
 
     - name: Commit changes
+      if: steps.verify-changed-files.outputs.changed == 'true'
       run: |
         git config --local user.email "action@github.com"
         git config --local user.name "GitHub Action"
         git add -A
-        git diff --staged --quiet || git commit -m "Auto-format code with black and isort"
-        git push 
+        git commit -m "🤖 Auto-format code with black and isort
+
+        🤖 Generated with [Claude Code](https://claude.ai/code)
+
+        Co-Authored-By: Claude <noreply@anthropic.com>" || exit 0
+        git push
+
+    - name: Comment on PR
+      if: steps.verify-changed-files.outputs.changed == 'true'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: '🤖 **Auto-formatted code**\n\nI automatically formatted your code with `black` and `isort` to maintain consistent code style. The changes have been pushed to this PR.'
+          })

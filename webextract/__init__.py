@@ -1,6 +1,6 @@
 """LLM WebExtract - AI-powered web content extraction using LLMs."""
 
-__version__ = "1.1.1"
+__version__ = "1.1.2"
 __author__ = "Himasha Herath"
 __description__ = "AI-powered web content extraction with Large Language Models"
 
@@ -16,6 +16,14 @@ from .config.settings import (
 
 # Core imports
 from .core.extractor import DataExtractor as WebExtractor
+from .core.exceptions import (
+    AuthenticationError,
+    ConfigurationError,
+    ExtractionError,
+    LLMError,
+    ScrapingError,
+    WebExtractError,
+)
 from .core.models import ExtractedContent, ExtractionConfig, StructuredData
 
 # Public API
@@ -29,11 +37,18 @@ __all__ = [
     "ScrapingConfig",
     "LLMConfig",
     "ConfigProfiles",
+    # Exceptions
+    "WebExtractError",
+    "ExtractionError",
+    "ScrapingError",
+    "LLMError",
+    "ConfigurationError",
+    "AuthenticationError",
 ]
 
 
 # Convenience functions for quick usage
-def quick_extract(url: str, model: str = "gemma3:27b", **kwargs):
+def quick_extract(url: str, model: str = "llama3.2", **kwargs):
     """Quick extraction with minimal configuration.
 
     Args:

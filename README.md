@@ -1,213 +1,305 @@
 # 🤖 LLM WebExtract
 
-> Turn any website into structured data using the power of AI
+> **AI-Powered Web Content Extraction** - Turn any website into structured data using Large Language Models
 
-Ever wanted to extract meaningful information from websites but got tired of parsing HTML and dealing with messy data? That's exactly why I built this tool. It combines modern web scraping with Large Language Models to intelligently extract structured information from any webpage.
+[![PyPI version](https://badge.fury.io/py/llm-webextract.svg)](https://badge.fury.io/py/llm-webextract)
+[![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-## 🎯 What does this actually do?
+Ever wanted to extract meaningful information from websites but got tired of parsing HTML and dealing with messy data? **LLM WebExtract** combines modern web scraping with Large Language Models to intelligently extract structured information from any webpage.
+
+## 🎯 What Does This Do?
 
 Instead of writing complex parsing rules for every website, this tool:
 
-1. **Scrapes the webpage** using Playwright (handles modern JavaScript sites)
-2. **Feeds the content to an LLM** (local via Ollama, or cloud via OpenAI/Anthropic)
-3. **Gets back structured data** - topics, entities, summaries, key facts, and more
+1. **🌐 Scrapes webpages** using Playwright (handles modern JavaScript sites)
+2. **🧠 Feeds content to AI** (local via Ollama, or cloud via OpenAI/Anthropic)  
+3. **📊 Returns structured data** - topics, entities, summaries, key facts, and more
 
 Think of it as having an AI assistant that reads web pages and summarizes them for you.
 
-## 🚀 Getting Started
+## ⭐ Key Features
+
+- **🔄 Multi-Provider Support**: Works with Ollama (local), OpenAI, and Anthropic
+- **🚀 Modern Web Scraping**: Handles JavaScript-heavy sites with Playwright
+- **📋 Pre-built Profiles**: Ready configurations for news, research, e-commerce
+- **🛡️ Robust Error Handling**: Specific exceptions for different failure types
+- **⚡ Batch Processing**: Extract from multiple URLs concurrently
+- **🎛️ Flexible Configuration**: Environment variables, custom prompts, schemas
+- **💾 Smart Caching**: Avoid re-processing the same URLs
+
+## 🚀 Quick Start
 
 ### Installation
 
 ```bash
+# Basic installation
 pip install llm-webextract
 playwright install chromium
-```
 
-Want to use OpenAI or Anthropic instead of local models?
-```bash
+# With cloud providers
 pip install llm-webextract[openai]     # For GPT models
-pip install llm-webextract[anthropic]  # For Claude models
+pip install llm-webextract[anthropic]  # For Claude models  
 pip install llm-webextract[all]        # Everything
 ```
 
-### Quick Examples
+### 30-Second Example
 
-**Command Line (easiest way to start):**
 ```bash
-# Extract content from any URL
+# Command line (requires local Ollama)
 llm-webextract extract "https://news.ycombinator.com"
-
-# Pretty formatted output
-llm-webextract extract "https://example.com" --format pretty
 
 # Test your setup
 llm-webextract test
 ```
 
-**Python Code:**
 ```python
+# Python - Local Ollama
 import webextract
 
-# Simple one-liner (requires Ollama running locally)
-result = webextract.quick_extract("https://news.bbc.co.uk")
+result = webextract.quick_extract("https://techcrunch.com")
 print(f"Summary: {result.summary}")
-print(f"Key topics: {result.topics}")
-
-# Or use cloud providers
-result = webextract.extract_with_openai(
-    "https://techcrunch.com", 
-    api_key="sk-your-key-here"
-)
+print(f"Topics: {result.topics}")
 ```
 
-## 🛠 Configuration Options
+## 🛠️ Configuration & Usage
 
-### Using Different LLM Providers
+### Provider Setup
 
-**Local with Ollama (default):**
+#### 🏠 Local with Ollama (Free & Private)
 ```python
 from webextract import WebExtractor, ConfigBuilder
 
 extractor = WebExtractor(
     ConfigBuilder()
-    .with_model("llama3:8b")  # or any model you have
+    .with_ollama("llama3.2")  # or any model you have
+    .build()
+)
+
+result = extractor.extract("https://example.com")
+```
+
+#### ☁️ OpenAI GPT
+```python
+extractor = WebExtractor(
+    ConfigBuilder()
+    .with_openai(api_key="sk-...", model="gpt-4o-mini")
     .build()
 )
 ```
 
-**OpenAI GPT:**
+#### 🧠 Anthropic Claude  
 ```python
 extractor = WebExtractor(
     ConfigBuilder()
-    .with_openai(api_key="sk-...", model="gpt-4")
-    .build()
-)
-```
-
-**Anthropic Claude:**
-```python
-extractor = WebExtractor(
-    ConfigBuilder()
-    .with_anthropic(api_key="sk-ant-...", model="claude-3-sonnet-20240229")
+    .with_anthropic(api_key="sk-ant-...", model="claude-3-5-sonnet-20241022")
     .build()
 )
 ```
 
 ### Pre-built Profiles
 
-I've included some ready-to-use configurations for common scenarios:
-
 ```python
-from webextract import ConfigProfiles
+from webextract import ConfigProfiles, WebExtractor
 
-# For news articles
+# Optimized for different content types
 news_extractor = WebExtractor(ConfigProfiles.news_scraping())
-
-# For research papers  
 research_extractor = WebExtractor(ConfigProfiles.research_papers())
-
-# For e-commerce sites
 shop_extractor = WebExtractor(ConfigProfiles.ecommerce())
+```
+
+### Environment Variables
+
+Set defaults to avoid repeating configuration:
+
+```bash
+export WEBEXTRACT_LLM_PROVIDER="openai"
+export WEBEXTRACT_MODEL="gpt-4o-mini"
+export WEBEXTRACT_API_KEY="sk-your-key"
+export WEBEXTRACT_MAX_CONTENT="8000"
+export WEBEXTRACT_REQUEST_TIMEOUT="45"
 ```
 
 ## 📊 What You Get Back
 
-The LLM analyzes the content and returns structured data like:
+The AI analyzes content and returns structured data:
 
-- **Summary** - Clean, concise overview
-- **Topics** - Main themes and subjects
-- **Entities** - People, companies, locations mentioned
-- **Key Facts** - Important information and takeaways
-- **Sentiment** - Overall tone (positive/negative/neutral)
-- **Category** - Content classification
-- **Important Dates** - Key dates found in the content
-
-Example output:
 ```json
 {
   "summary": "Article discusses the latest developments in AI technology...",
   "topics": ["artificial intelligence", "machine learning", "tech industry"],
-  "entities": ["OpenAI", "San Francisco", "Sam Altman"],
+  "entities": {
+    "people": ["Sam Altman", "Satya Nadella"],
+    "organizations": ["OpenAI", "Microsoft", "Google"],
+    "locations": ["San Francisco", "Silicon Valley"]
+  },
   "sentiment": "positive",
-  "key_facts": ["New model released", "Performance improvements", "Beta testing"],
+  "key_facts": [
+    "New model shows 40% improvement in reasoning",
+    "Beta testing starts next month",
+    "Open source version planned for 2024"
+  ],
   "category": "technology",
-  "confidence_score": 0.92
+  "important_dates": ["2024-03-15", "Q2 2024"],
+  "statistics": ["40% improvement", "$10B investment"],
+  "confidence": 0.89
 }
 ```
 
-## ⚙️ Environment Setup
-
-You can configure defaults using environment variables:
-
-```bash
-export WEBEXTRACT_MODEL="llama3:8b"
-export WEBEXTRACT_LLM_PROVIDER="ollama"
-export WEBEXTRACT_REQUEST_TIMEOUT="45"
-export WEBEXTRACT_MAX_CONTENT="8000"
-```
-
-## 🏗 How It Works
-
-1. **Modern Web Scraping** - Uses Playwright to handle JavaScript, SPAs, and modern websites
-2. **Smart Content Processing** - Removes ads, navigation, and focuses on main content
-3. **LLM Analysis** - Feeds clean content to your chosen LLM for intelligent extraction
-4. **Structured Output** - Returns consistent, structured data you can actually use
-
-## 🤔 Why I Built This
-
-I was tired of:
-- Writing custom scrapers for every website
-- Dealing with HTML parsing edge cases
-- Manually extracting insights from content
-- Working with inconsistent data formats
-
-This tool solves all of that by letting the LLM do the heavy lifting of understanding and structuring content.
-
-## 🛡 Requirements
-
-- Python 3.8+
-- One of:
-  - **Ollama** running locally (free, private)
-  - **OpenAI API key** (paid, powerful)
-  - **Anthropic API key** (paid, great reasoning)
-
 ## 🔧 Advanced Usage
 
-**Custom extraction prompts:**
-```bash
-llm-webextract extract "https://example.com" \
-  --prompt "Focus on extracting pricing and contact information"
+### Custom Extraction Schema
+
+```python
+schema = {
+    "product_name": "Extract the main product name",
+    "price": "Extract the current price",
+    "rating": "Extract average rating (number only)",
+    "reviews_count": "Extract total number of reviews",
+    "key_features": "List main product features"
+}
+
+result = extractor.extract_with_custom_schema(
+    "https://amazon.com/product/...", 
+    schema
+)
 ```
 
-**Batch processing:**
+### Batch Processing
+
 ```python
-urls = ["https://site1.com", "https://site2.com", "https://site3.com"]
-for url in urls:
-    result = extractor.extract(url)
-    # Process each result
+urls = [
+    "https://techcrunch.com/article1",
+    "https://venturebeat.com/article2", 
+    "https://theverge.com/article3"
+]
+
+results = extractor.extract_batch(urls, max_workers=3)
+for result in results:
+    if result and result.is_successful:
+        print(f"{result.url}: {result.get_summary()}")
 ```
 
-**Error handling:**
+### Error Handling
+
 ```python
+from webextract import (
+    WebExtractor, 
+    ExtractionError, 
+    ScrapingError, 
+    LLMError,
+    AuthenticationError
+)
+
 try:
     result = extractor.extract("https://problematic-site.com")
+except AuthenticationError:
+    print("Invalid API key")
+except ScrapingError as e:
+    print(f"Failed to scrape website: {e}")
+except LLMError as e:
+    print(f"AI processing failed: {e}")
 except ExtractionError as e:
-    print(f"Failed to extract: {e}")
+    print(f"General extraction error: {e}")
+```
+
+### Custom Prompts
+
+```python
+config = (ConfigBuilder()
+    .with_openai("sk-...", "gpt-4")
+    .with_custom_prompt("""
+        Focus on extracting:
+        1. Financial metrics and numbers
+        2. Company performance indicators  
+        3. Market trends and predictions
+        4. Executive quotes and statements
+    """)
+    .build())
+```
+
+## 🏗️ How It Works
+
+```mermaid
+graph LR
+    A[URL] --> B[Playwright Scraper]
+    B --> C[Content Cleaning]
+    C --> D[LLM Processing]
+    D --> E[Structured Data]
+    
+    B --> F[JavaScript Handling]
+    C --> G[Ad/Nav Removal]
+    D --> H[JSON Validation]
+    E --> I[Confidence Scoring]
+```
+
+1. **Modern Web Scraping**: Playwright handles JavaScript, SPAs, and modern websites
+2. **Intelligent Content Processing**: Removes ads, navigation, focuses on main content
+3. **AI Analysis**: Your chosen LLM extracts structured information
+4. **Quality Assurance**: Validates output format and calculates confidence scores
+
+## 🛡️ Requirements
+
+- **Python 3.8+**
+- **One of:**
+  - **Ollama** running locally (free, private)
+  - **OpenAI API key** (paid, powerful) 
+  - **Anthropic API key** (paid, great reasoning)
+
+### Installing Ollama (Recommended for beginners)
+
+```bash
+# Install Ollama
+curl -fsSL https://ollama.ai/install.sh | sh
+
+# Pull a model
+ollama pull llama3.2
+
+# Start the service  
+ollama serve
+```
+
+## 🎯 Use Cases
+
+- **📰 News Monitoring**: Extract key information from news articles
+- **🔬 Research**: Process academic papers and technical documents
+- **🛒 E-commerce**: Monitor product prices, reviews, specifications
+- **📈 Market Research**: Analyze competitor websites and industry trends
+- **📋 Content Curation**: Summarize and categorize web content
+- **🤖 AI Training**: Generate structured datasets from web content
+
+## 🧪 Testing Your Setup
+
+```bash
+# Test connection and model availability
+llm-webextract test
+
+# Test with a specific URL
+llm-webextract extract "https://example.com" --format pretty
+
+# Check available providers
+python -c "
+from webextract.core.llm_factory import get_available_providers
+import json
+print(json.dumps(get_available_providers(), indent=2))
+"
 ```
 
 ## 🤝 Contributing
 
-Found a bug? Want to add a feature? PRs are welcome!
+We welcome contributions! Here's how to get started:
 
-**For Contributors:**
-- 📖 Read our [Development Guide](DEVELOPMENT.md) for commit conventions, versioning, and release processes
-- 🐛 Report bugs by opening an issue with detailed reproduction steps
-- 💡 Suggest features by opening a discussion or issue
-- 🔧 Submit PRs following our coding standards and commit message format
+### For Contributors
 
-**Quick Start for Contributors:**
+- 📖 Read our [Development Guide](DEVELOPMENT.md) for commit conventions and processes
+- 🐛 Report bugs by opening an issue with detailed reproduction steps  
+- 💡 Suggest features through GitHub discussions
+- 🔧 Submit PRs following our coding standards
+
+### Quick Start for Development
+
 ```bash
-# Fork and clone the repo
+# Fork and clone
 git clone https://github.com/HimashaHerath/webextract.git
 cd webextract
 
@@ -215,30 +307,59 @@ cd webextract
 pip install -e ".[dev]"
 
 # Run tests and quality checks
-python -m pytest && python -m black --check . && python -m flake8 --config .flake8
+python -m pytest
+python -m black --check .
+python -m flake8 --config .flake8
 ```
 
-1. Fork the repo
-2. Create a feature branch
-3. Make your changes
-4. Add tests if possible
-5. Submit a PR
+## 🔍 Troubleshooting
+
+### Common Issues
+
+**"Model not available"**
+```bash
+# Check if Ollama is running
+curl http://localhost:11434/api/tags
+
+# Pull the model if missing
+ollama pull llama3.2
+```
+
+**"Connection refused"**
+- Ensure Ollama is running: `ollama serve`
+- Check firewall settings
+- Verify the base URL in configuration
+
+**"Rate limit exceeded"**
+- Add delays between requests
+- Use batch processing with lower concurrency
+- Check your API plan limits
+
+**"Content too short"**
+- Site might be blocking scrapers
+- Try different user agents
+- Check if site requires JavaScript (we handle this)
 
 ## 📄 License
 
 MIT License - feel free to use this in your projects!
 
-## 🙏 Thanks
+## 🙏 Acknowledgments
 
-Built with some amazing tools:
+Built with these amazing tools:
 - [Ollama](https://ollama.ai/) - Local LLM inference
-- [Playwright](https://playwright.dev/) - Modern web scraping
+- [Playwright](https://playwright.dev/) - Modern web scraping  
 - [Beautiful Soup](https://www.crummy.com/software/BeautifulSoup/) - HTML parsing
 - [Pydantic](https://pydantic.dev/) - Data validation
 - [Typer](https://typer.tiangolo.com/) - CLI framework
 
+## 📞 Support
+
+- **📫 Email**: [himasha626@gmail.com](mailto:himasha626@gmail.com)
+- **🐛 Issues**: [GitHub Issues](https://github.com/HimashaHerath/webextract/issues)
+- **💬 Discussions**: [GitHub Discussions](https://github.com/HimashaHerath/webextract/discussions)
+
 ---
 
-**Got questions?** Open an issue - I'm happy to help! 
-
-**Find this useful?** Give it a ⭐ - it really helps! 
+**Got questions?** Open an issue - I'm happy to help!  
+**Find this useful?** Give it a ⭐ - it really helps!
