@@ -6,10 +6,13 @@ import re
 from abc import ABC, abstractmethod
 from typing import Any, Dict, Optional
 
-import ollama
-
 from ..config.settings import settings
 from .exceptions import LLMError
+
+try:
+    import ollama
+except ImportError:
+    ollama = None
 
 logger = logging.getLogger(__name__)
 
@@ -227,6 +230,10 @@ class OllamaClient(BaseLLMClient):
         """Initialize the Ollama client with model name and base URL."""
         super().__init__(model_name or settings.DEFAULT_MODEL)
         self.base_url = base_url or settings.OLLAMA_BASE_URL
+
+        if ollama is None:
+            raise LLMError("Ollama package not installed. Install with: pip install ollama")
+
         try:
             self.client = ollama.Client(host=self.base_url)
         except Exception as e:
