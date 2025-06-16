@@ -1,8 +1,7 @@
 """Anthropic Claude client for processing extracted content."""
 
-import json
 import logging
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 from .exceptions import AuthenticationError, LLMError, ModelNotAvailableError
 from .llm_client import BaseLLMClient
@@ -13,23 +12,21 @@ logger = logging.getLogger(__name__)
 class AnthropicClient(BaseLLMClient):
     """Client for interacting with Anthropic Claude models."""
 
-    def __init__(
-        self, api_key: str, model_name: str = "claude-3-5-sonnet-20241022"
-    ):
+    def __init__(self, api_key: str, model_name: str = "claude-3-5-sonnet-20241022"):
+        """Initialize the Anthropic client with API key and model name."""
         super().__init__(model_name)
         self.api_key = api_key
         self._client = None
         self._setup_client()
 
     def _setup_client(self):
-        """Setup Anthropic client."""
+        """Set up the Anthropic client."""
         try:
             import anthropic
+
             self._client = anthropic.Anthropic(api_key=self.api_key)
         except ImportError:
-            raise LLMError(
-                "Anthropic package not installed. Install with: pip install anthropic"
-            )
+            raise LLMError("Anthropic package not installed. Install with: pip install anthropic")
         except Exception as e:
             raise AuthenticationError(f"Failed to setup Anthropic client: {e}")
 
@@ -37,7 +34,7 @@ class AnthropicClient(BaseLLMClient):
         """Check if the specified model is available."""
         try:
             # Anthropic doesn't have a public models endpoint, so we'll try a simple request
-            response = self._client.messages.create(
+            self._client.messages.create(
                 model=self.model_name,
                 max_tokens=10,
                 messages=[{"role": "user", "content": "test"}],
@@ -45,9 +42,7 @@ class AnthropicClient(BaseLLMClient):
             return True
         except Exception as e:
             error_str = str(e).lower()
-            if "model" in error_str and (
-                "not found" in error_str or "invalid" in error_str
-            ):
+            if "model" in error_str and ("not found" in error_str or "invalid" in error_str):
                 return False
             # If it's an auth error, the model might exist but we can't access it
             logger.error(f"Failed to check Anthropic model availability: {e}")
@@ -68,7 +63,7 @@ class AnthropicClient(BaseLLMClient):
                 prompt = custom_prompt or self._get_improved_prompt()
 
             # Truncate content if needed
-            truncated_content = content[:self.max_content_length]
+            truncated_content = content[: self.max_content_length]
             if len(content) > self.max_content_length:
                 logger.info(
                     f"Content truncated from {len(content)} to "
@@ -111,9 +106,7 @@ CRITICAL RULES:
                     )
 
                     response_text = response.content[0].text.strip()
-                    logger.debug(
-                        f"Anthropic response length: {len(response_text)} characters"
-                    )
+                    logger.debug(f"Anthropic response length: {len(response_text)} characters")
 
                     # Parse the response
                     result = self._parse_json_response(response_text)
@@ -126,17 +119,13 @@ CRITICAL RULES:
                         return result
 
                 except Exception as e:
-                    logger.error(
-                        f"Anthropic generation failed (attempt {attempt + 1}): {e}"
-                    )
+                    logger.error(f"Anthropic generation failed (attempt {attempt + 1}): {e}")
                     error_str = str(e).lower()
 
                     if "rate" in error_str and "limit" in error_str:
                         raise LLMError(f"Anthropic rate limit exceeded: {e}")
                     elif "authentication" in error_str or "api_key" in error_str:
-                        raise AuthenticationError(
-                            f"Anthropic authentication failed: {e}"
-                        )
+                        raise AuthenticationError(f"Anthropic authentication failed: {e}")
                     elif "model" in error_str and (
                         "not found" in error_str or "invalid" in error_str
                     ):
@@ -145,9 +134,7 @@ CRITICAL RULES:
                         )
 
                     if attempt == 2:  # Last attempt
-                        raise LLMError(
-                            f"Anthropic processing failed after 3 attempts: {e}"
-                        )
+                        raise LLMError(f"Anthropic processing failed after 3 attempts: {e}")
 
             return self._create_safe_fallback(content[:200])
 
@@ -180,14 +167,14 @@ CRITICAL RULES:
 
             # Ensure summary doesn't exceed max length
             if len(summary) > max_length:
-                summary = summary[:max_length - 3].rsplit(" ", 1)[0] + "..."
+                summary = summary[: max_length - 3].rsplit(" ", 1)[0] + "..."
 
             return summary
 
         except Exception as e:
             logger.error(f"Failed to generate Anthropic summary: {e}")
             if len(content) > max_length:
-                preview = content[:max_length - 3] + "..."
+                preview = content[: max_length - 3] + "..."
             else:
                 preview = content
             return preview

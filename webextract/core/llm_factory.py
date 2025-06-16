@@ -1,7 +1,6 @@
 """Factory for creating LLM clients based on configuration."""
 
 import logging
-from typing import Optional
 
 from ..config.settings import WebExtractConfig
 from .exceptions import ConfigurationError, LLMError
@@ -27,39 +26,31 @@ def create_llm_client(config: WebExtractConfig) -> BaseLLMClient:
 
     try:
         if provider == "ollama":
-            return OllamaClient(
-                model_name=config.llm.model_name,
-                base_url=config.llm.base_url
-            )
+            return OllamaClient(model_name=config.llm.model_name, base_url=config.llm.base_url)
 
         elif provider == "openai":
             if not config.llm.api_key:
-                raise ConfigurationError(
-                    "OpenAI API key is required but not provided"
-                )
+                raise ConfigurationError("OpenAI API key is required but not provided")
 
             try:
                 from .openai_client import OpenAIClient
+
                 return OpenAIClient(
                     api_key=config.llm.api_key,
                     model_name=config.llm.model_name,
-                    base_url=config.llm.base_url
+                    base_url=config.llm.base_url,
                 )
             except ImportError as e:
                 raise LLMError(f"OpenAI dependencies not installed: {e}")
 
         elif provider == "anthropic":
             if not config.llm.api_key:
-                raise ConfigurationError(
-                    "Anthropic API key is required but not provided"
-                )
+                raise ConfigurationError("Anthropic API key is required but not provided")
 
             try:
                 from .anthropic_client import AnthropicClient
-                return AnthropicClient(
-                    api_key=config.llm.api_key,
-                    model_name=config.llm.model_name
-                )
+
+                return AnthropicClient(api_key=config.llm.api_key, model_name=config.llm.model_name)
             except ImportError as e:
                 raise LLMError(f"Anthropic dependencies not installed: {e}")
 
@@ -84,19 +75,21 @@ def get_available_providers() -> dict:
     providers = {
         "ollama": {"available": True, "requires": "Local Ollama installation"},
         "openai": {"available": False, "requires": "openai package"},
-        "anthropic": {"available": False, "requires": "anthropic package"}
+        "anthropic": {"available": False, "requires": "anthropic package"},
     }
 
     # Check OpenAI availability
     try:
-        import openai
+        import openai  # noqa: F401
+
         providers["openai"]["available"] = True
     except ImportError:
         pass
 
     # Check Anthropic availability
     try:
-        import anthropic
+        import anthropic  # noqa: F401
+
         providers["anthropic"]["available"] = True
     except ImportError:
         pass

@@ -9,7 +9,7 @@ from typing import Any, Dict, Optional
 import ollama
 
 from ..config.settings import settings
-from .exceptions import LLMError, ModelNotAvailableError
+from .exceptions import LLMError
 
 logger = logging.getLogger(__name__)
 
@@ -18,6 +18,7 @@ class BaseLLMClient(ABC):
     """Abstract base class for LLM clients."""
 
     def __init__(self, model_name: str):
+        """Initialize the base LLM client with model name."""
         self.model_name = model_name
         self.max_content_length = settings.MAX_CONTENT_LENGTH
 
@@ -41,9 +42,7 @@ class BaseLLMClient(ABC):
         """Generate a brief summary of the content."""
         pass
 
-    def extract_with_schema(
-        self, content: str, schema: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    def extract_with_schema(self, content: str, schema: Dict[str, Any]) -> Dict[str, Any]:
         """Extract data according to a specific schema."""
         return self.generate_structured_data(content, schema=schema)
 
@@ -123,7 +122,7 @@ Use appropriate empty values (empty strings, empty arrays) for missing data."""
         if start == -1 or end == -1 or end <= start:
             return None
 
-        json_text = text[start: end + 1]
+        json_text = text[start : end + 1]
 
         # Safe replacements
         # Fix common LLM mistakes
@@ -134,14 +133,12 @@ Use appropriate empty values (empty strings, empty arrays) for missing data."""
         def fix_string_newlines(match):
             string_content = match.group(1)
             string_content = (
-                string_content.replace("\n", "\\n")
-                .replace("\r", "\\r")
-                .replace("\t", "\\t")
+                string_content.replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t")
             )
             return f'"{string_content}"'
 
         # This regex matches strings but avoids the complexities of escaped quotes
-        string_pattern = r'"([^"\\]*(?:\\.[^"\\]*)*)"
+        string_pattern = r'"([^"\\]*(?:\\.[^"\\]*)*)"'
         json_text = re.sub(string_pattern, fix_string_newlines, json_text)
 
         return json_text
@@ -184,15 +181,11 @@ Use appropriate empty values (empty strings, empty arrays) for missing data."""
                     elif expected_type == str and result[field] is None:
                         result[field] = ""
                     else:
-                        logger.warning(
-                            f"Field {field} has wrong type: {type(result[field])}"
-                        )
+                        logger.warning(f"Field {field} has wrong type: {type(result[field])}")
 
         return True
 
-    def _validate_against_schema(
-        self, result: Dict[str, Any], schema: Dict[str, Any]
-    ) -> bool:
+    def _validate_against_schema(self, result: Dict[str, Any], schema: Dict[str, Any]) -> bool:
         """Validate result against provided schema."""
         for key, value in schema.items():
             if key not in result:
@@ -231,6 +224,7 @@ class OllamaClient(BaseLLMClient):
     """Client for interacting with local Ollama LLM."""
 
     def __init__(self, model_name: str = None, base_url: str = None):
+        """Initialize the Ollama client with model name and base URL."""
         super().__init__(model_name or settings.DEFAULT_MODEL)
         self.base_url = base_url or settings.OLLAMA_BASE_URL
         try:
@@ -323,13 +317,9 @@ CRITICAL RULES:
                         continue
 
                 except Exception as e:
-                    logger.error(
-                        f"Ollama generation failed (attempt {attempt + 1}): {e}"
-                    )
+                    logger.error(f"Ollama generation failed (attempt {attempt + 1}): {e}")
                     if "connection" in str(e).lower():
-                        raise LLMError(
-                            f"Cannot connect to Ollama server at {self.base_url}: {e}"
-                        )
+                        raise LLMError(f"Cannot connect to Ollama server at {self.base_url}: {e}")
                     if attempt == settings.LLM_RETRY_ATTEMPTS - 1:
                         retry_count = settings.LLM_RETRY_ATTEMPTS
                         raise LLMError(

@@ -35,27 +35,18 @@ def extract(
     output_format: str = typer.Option(
         "json", "--format", "-f", help="Output format (json, pretty)"
     ),
-    output_file: Optional[str] = typer.Option(
-        None, "--output", "-o", help="Output file path"
-    ),
-    model: str = typer.Option(
-        settings.DEFAULT_MODEL, "--model", "-m", help="LLM model to use"
-    ),
+    output_file: Optional[str] = typer.Option(None, "--output", "-o", help="Output file path"),
+    model: str = typer.Option(settings.DEFAULT_MODEL, "--model", "-m", help="LLM model to use"),
     max_content: int = typer.Option(
         settings.MAX_CONTENT_LENGTH, "--max-content", help="Max content length"
     ),
-    summary: bool = typer.Option(
-        False, "--summary", "-s", help="Include brief summary"
-    ),
+    summary: bool = typer.Option(False, "--summary", "-s", help="Include brief summary"),
     custom_prompt: Optional[str] = typer.Option(
         None, "--prompt", "-p", help="Custom extraction prompt"
     ),
-    verbose: bool = typer.Option(
-        False, "--verbose", "-v", help="Verbose output"
-    ),
+    verbose: bool = typer.Option(False, "--verbose", "-v", help="Verbose output"),
 ):
     """Extract structured data from a webpage."""
-
     # Validate URL format
     from urllib.parse import urlparse
 
@@ -185,7 +176,6 @@ def version():
 
 def display_pretty_output(result):
     """Display extraction results in a pretty format."""
-
     # Main info panel
     info_table = Table(show_header=False, box=None)
     info_table.add_row("URL:", result.url)
@@ -212,7 +202,7 @@ def display_pretty_output(result):
         structured_table.add_column("Value", style="white")
 
         # Handle both dictionary and Pydantic model formats
-        if hasattr(result.structured_info, 'model_dump'):
+        if hasattr(result.structured_info, "model_dump"):
             # It's a Pydantic model
             structured_dict = result.structured_info.model_dump()
         elif isinstance(result.structured_info, dict):
@@ -252,7 +242,7 @@ def display_pretty_output(result):
 
 
 def main():
-    """Main CLI entry point."""
+    """Run the main CLI application."""
     app()
 
 

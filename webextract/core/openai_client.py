@@ -1,8 +1,7 @@
 """OpenAI LLM client for processing extracted content."""
 
-import json
 import logging
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 from .exceptions import AuthenticationError, LLMError, ModelNotAvailableError
 from .llm_client import BaseLLMClient
@@ -13,12 +12,8 @@ logger = logging.getLogger(__name__)
 class OpenAIClient(BaseLLMClient):
     """Client for interacting with OpenAI GPT models."""
 
-    def __init__(
-        self,
-        api_key: str,
-        model_name: str = "gpt-4o-mini",
-        base_url: str = None,
-    ):
+    def __init__(self, api_key: str, model_name: str = "gpt-4o-mini", base_url: str = None):
+        """Initialize the OpenAI client with API key, model name, and base URL."""
         super().__init__(model_name)
         self.api_key = api_key
         self.base_url = base_url or "https://api.openai.com/v1"
@@ -26,16 +21,13 @@ class OpenAIClient(BaseLLMClient):
         self._setup_client()
 
     def _setup_client(self):
-        """Setup OpenAI client."""
+        """Set up the OpenAI client."""
         try:
             import openai
-            self._client = openai.OpenAI(
-                api_key=self.api_key, base_url=self.base_url
-            )
+
+            self._client = openai.OpenAI(api_key=self.api_key, base_url=self.base_url)
         except ImportError:
-            raise LLMError(
-                "OpenAI package not installed. Install with: pip install openai"
-            )
+            raise LLMError("OpenAI package not installed. Install with: pip install openai")
         except Exception as e:
             raise AuthenticationError(f"Failed to setup OpenAI client: {e}")
 
@@ -65,7 +57,7 @@ class OpenAIClient(BaseLLMClient):
                 prompt = custom_prompt or self._get_improved_prompt()
 
             # Truncate content if needed
-            truncated_content = content[:self.max_content_length]
+            truncated_content = content[: self.max_content_length]
             if len(content) > self.max_content_length:
                 logger.info(
                     f"Content truncated from {len(content)} to "
@@ -112,9 +104,7 @@ CRITICAL RULES:
                     )
 
                     response_text = response.choices[0].message.content.strip()
-                    logger.debug(
-                        f"OpenAI response length: {len(response_text)} characters"
-                    )
+                    logger.debug(f"OpenAI response length: {len(response_text)} characters")
 
                     # Parse the response
                     result = self._parse_json_response(response_text)
@@ -127,9 +117,7 @@ CRITICAL RULES:
                         return result
 
                 except Exception as e:
-                    logger.error(
-                        f"OpenAI generation failed (attempt {attempt + 1}): {e}"
-                    )
+                    logger.error(f"OpenAI generation failed (attempt {attempt + 1}): {e}")
                     if "rate_limit" in str(e).lower():
                         raise LLMError(f"OpenAI rate limit exceeded: {e}")
                     elif "authentication" in str(e).lower():
@@ -140,9 +128,7 @@ CRITICAL RULES:
                         )
 
                     if attempt == 2:  # Last attempt
-                        raise LLMError(
-                            f"OpenAI processing failed after 3 attempts: {e}"
-                        )
+                        raise LLMError(f"OpenAI processing failed after 3 attempts: {e}")
 
             return self._create_safe_fallback(content[:200])
 
@@ -160,8 +146,7 @@ CRITICAL RULES:
                     {
                         "role": "system",
                         "content": (
-                            "You are a content summarizer. Provide clear, "
-                            "concise summaries."
+                            "You are a content summarizer. Provide clear, " "concise summaries."
                         ),
                     },
                     {
@@ -181,14 +166,14 @@ CRITICAL RULES:
 
             # Ensure summary doesn't exceed max length
             if len(summary) > max_length:
-                summary = summary[:max_length - 3].rsplit(" ", 1)[0] + "..."
+                summary = summary[: max_length - 3].rsplit(" ", 1)[0] + "..."
 
             return summary
 
         except Exception as e:
             logger.error(f"Failed to generate OpenAI summary: {e}")
             if len(content) > max_length:
-                preview = content[:max_length - 3] + "..."
+                preview = content[: max_length - 3] + "..."
             else:
                 preview = content
             return preview
