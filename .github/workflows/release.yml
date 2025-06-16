@@ -222,12 +222,8 @@ jobs:
           cp CHANGELOG.md changelog_final.md
         fi
 
-        # Set output for the release body
-        {
-          echo 'changelog<<EOF'
-          cat changelog_final.md
-          echo 'EOF'
-        } >> $GITHUB_OUTPUT
+        # Set output for the release body - just set a flag to use tag description
+        echo "use_tag_description=true" >> $GITHUB_OUTPUT
 
     - name: Create GitHub Release
       uses: softprops/action-gh-release@v2
@@ -237,7 +233,7 @@ jobs:
         body: |
           # 🚀 WebExtract v${{ needs.validate-release.outputs.version }}
 
-          ${{ steps.changelog.outputs.changelog }}
+          See the git tag description for detailed changelog information.
 
           ## 📦 Installation
 
