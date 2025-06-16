@@ -225,6 +225,10 @@ jobs:
         # Set output for the release body - just set a flag to use tag description
         echo "use_tag_description=true" >> $GITHUB_OUTPUT
 
+    - name: Update documentation with version info
+      run: |
+        python scripts/update_docs_version.py
+
     - name: Create GitHub Release
       uses: softprops/action-gh-release@v2
       with:
@@ -254,3 +258,8 @@ jobs:
         prerelease: ${{ needs.validate-release.outputs.is-prerelease == 'true' }}
         generate_release_notes: true
         make_latest: ${{ needs.validate-release.outputs.is-prerelease == 'false' }}
+
+    - name: Trigger documentation update
+      run: |
+        echo "📚 Documentation will be updated automatically by the docs workflow"
+        echo "🔗 Documentation URL: https://himashaherath.github.io/webextract"

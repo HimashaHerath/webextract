@@ -1,0 +1,362 @@
+name: Documentation
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+  actions: read
+  repository-projects: read
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  build-docs:
+    name: Build Documentation
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Need full history for version detection
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.11"
+
+    - name: Install documentation dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install mkdocs mkdocs-material
+        pip install pymdown-extensions mkdocs-minify-plugin
+
+    - name: Get version information
+      id: version
+      run: |
+        # Get current version from package
+        PACKAGE_VERSION=$(python -c "
+        import sys; sys.path.insert(0, '.')
+        try:
+            import webextract
+            print(webextract.__version__)
+        except:
+            print('dev')
+        ")
+
+        # Get git tag if available
+        if git describe --tags --exact-match 2>/dev/null; then
+          GIT_TAG=$(git describe --tags --exact-match)
+          IS_RELEASE=true
+        else
+          GIT_TAG="main"
+          IS_RELEASE=false
+        fi
+
+        # Get commit info
+        COMMIT_SHA=$(git rev-parse --short HEAD)
+        COMMIT_DATE=$(git log -1 --format=%cd --date=short)
+
+        echo "package_version=$PACKAGE_VERSION" >> $GITHUB_OUTPUT
+        echo "git_tag=$GIT_TAG" >> $GITHUB_OUTPUT
+        echo "is_release=$IS_RELEASE" >> $GITHUB_OUTPUT
+        echo "commit_sha=$COMMIT_SHA" >> $GITHUB_OUTPUT
+        echo "commit_date=$COMMIT_DATE" >> $GITHUB_OUTPUT
+
+        echo "📦 Package Version: $PACKAGE_VERSION"
+        echo "🏷️ Git Tag: $GIT_TAG"
+        echo "🚀 Is Release: $IS_RELEASE"
+        echo "📝 Commit: $COMMIT_SHA ($COMMIT_DATE)"
+
+    - name: Configure MkDocs
+      run: |
+        cat > mkdocs.yml << 'EOF'
+        site_name: LLM WebExtract Documentation
+        site_description: AI-powered web content extraction with Large Language Models
+        site_author: Himasha Herath
+        site_url: https://himashaherath.github.io/webextract
+
+        repo_name: HimashaHerath/webextract
+        repo_url: https://github.com/HimashaHerath/webextract
+        edit_uri: edit/main/docs/
+
+        nav:
+          - Home: index.md
+          - Quick Start: quick-start.md
+          - Configuration: configuration.md
+          - API Reference: api-reference.md
+          - Examples: examples.md
+          - Development: development.md
+          - Changelog: changelog.md
+
+        theme:
+          name: material
+          palette:
+            - scheme: default
+              primary: blue
+              accent: blue
+              toggle:
+                icon: material/brightness-7
+                name: Switch to dark mode
+            - scheme: slate
+              primary: blue
+              accent: blue
+              toggle:
+                icon: material/brightness-4
+                name: Switch to light mode
+          features:
+            - navigation.tabs
+            - navigation.sections
+            - navigation.expand
+            - navigation.top
+            - search.highlight
+            - search.share
+            - content.code.copy
+            - content.action.edit
+
+        plugins:
+          - search
+          - minify:
+              minify_html: true
+
+        markdown_extensions:
+          - pymdownx.highlight:
+              anchor_linenums: true
+          - pymdownx.inlinehilite
+          - pymdownx.snippets
+          - pymdownx.superfences
+          - pymdownx.tabbed:
+              alternate_style: true
+          - admonition
+          - pymdownx.details
+          - attr_list
+          - md_in_html
+          - tables
+          - toc:
+              permalink: true
+
+        extra:
+          version:
+            provider: mike
+            default: latest
+          social:
+            - icon: fontawesome/brands/github
+              link: https://github.com/HimashaHerath/webextract
+            - icon: fontawesome/brands/python
+              link: https://pypi.org/project/llm-webextract/
+        EOF
+
+    - name: Create documentation structure
+      run: |
+        mkdir -p docs
+
+        # Create main documentation files
+        cat > docs/index.md << 'EOF'
+        # 🤖 LLM WebExtract
+
+        **Version:** ${{ steps.version.outputs.package_version }}
+        **Release:** ${{ steps.version.outputs.git_tag }}
+        **Updated:** ${{ steps.version.outputs.commit_date }}
+
+        > **AI-Powered Web Content Extraction** - Turn any website into structured data using Large Language Models
+
+        [![PyPI version](https://badge.fury.io/py/llm-webextract.svg)](https://badge.fury.io/py/llm-webextract)
+        [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
+        [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+        ## What Does This Do?
+
+        Instead of writing complex parsing rules for every website, this tool:
+
+        1. **🌐 Scrapes webpages** using Playwright (handles modern JavaScript sites)
+        2. **🧠 Feeds content to AI** (local via Ollama, or cloud via OpenAI/Anthropic)
+        3. **📊 Returns structured data** - topics, entities, summaries, key facts, and more
+
+        ## Quick Installation
+
+        ```bash
+        pip install llm-webextract==${{ steps.version.outputs.package_version }}
+        playwright install chromium
+        ```
+
+        ## Key Features
+
+        - **🔄 Multi-Provider Support**: Works with Ollama (local), OpenAI, and Anthropic
+        - **🚀 Modern Web Scraping**: Handles JavaScript-heavy sites with Playwright
+        - **📋 Pre-built Profiles**: Ready configurations for news, research, e-commerce
+        - **🛡️ Robust Error Handling**: Specific exceptions for different failure types
+        - **⚡ Batch Processing**: Extract from multiple URLs concurrently
+        - **🎛️ Flexible Configuration**: Environment variables, custom prompts, schemas
+
+        [Get Started →](quick-start.md){ .md-button .md-button--primary }
+        [View Examples →](examples.md){ .md-button }
+
+        EOF
+
+        # Copy existing documentation files with link fixes
+        sed 's|DEVELOPMENT\.md|development.md|g' README.md > docs/quick-start.md
+        if [ -f API_REFERENCE.md ]; then
+          cp API_REFERENCE.md docs/api-reference.md
+        else
+          echo "# API Reference" > docs/api-reference.md
+          echo "" >> docs/api-reference.md
+          echo "See [main README](index.md) for API documentation." >> docs/api-reference.md
+        fi
+        cp DEVELOPMENT.md docs/development.md
+        cp CHANGELOG.md docs/changelog.md
+
+        # Create configuration guide
+        cat > docs/configuration.md << 'EOF'
+        # Configuration Guide
+
+        ## Provider Setup
+
+        ### Local with Ollama (Free & Private)
+        ```python
+        from webextract import WebExtractor, ConfigBuilder
+
+        extractor = WebExtractor(
+            ConfigBuilder()
+            .with_ollama("llama3.2")
+            .build()
+        )
+        ```
+
+        ### OpenAI GPT
+        ```python
+        extractor = WebExtractor(
+            ConfigBuilder()
+            .with_openai(api_key="sk-...", model="gpt-4o-mini")
+            .build()
+        )
+        ```
+
+        ### Anthropic Claude
+        ```python
+        extractor = WebExtractor(
+            ConfigBuilder()
+            .with_anthropic(api_key="sk-ant-...", model="claude-3-5-sonnet-20241022")
+            .build()
+        )
+        ```
+
+        ## Environment Variables
+
+        ```bash
+        export WEBEXTRACT_LLM_PROVIDER="openai"
+        export WEBEXTRACT_MODEL="gpt-4o-mini"
+        export WEBEXTRACT_API_KEY="sk-your-key"
+        export WEBEXTRACT_MAX_CONTENT="8000"
+        export WEBEXTRACT_REQUEST_TIMEOUT="45"
+        ```
+
+        For complete configuration options, see the [API Reference](api-reference.md).
+        EOF
+
+        # Create examples page
+        cat > docs/examples.md << 'EOF'
+        # Examples
+
+        ## Basic Usage
+
+        ```python
+        import webextract
+
+        # Quick extraction
+        result = webextract.quick_extract("https://techcrunch.com")
+        print(f"Summary: {result.summary}")
+        print(f"Topics: {result.topics}")
+        ```
+
+        ## Multi-Provider Example
+
+        ```python
+        from webextract import WebExtractor, ConfigBuilder
+
+        # Try multiple providers with fallback
+        providers = [
+            ConfigBuilder().with_ollama("llama3.2").build(),
+            ConfigBuilder().with_openai("sk-...", "gpt-4o-mini").build(),
+            ConfigBuilder().with_anthropic("sk-ant-...", "claude-3-5-sonnet-20241022").build()
+        ]
+
+        for config in providers:
+            try:
+                extractor = WebExtractor(config)
+                result = extractor.extract("https://example.com")
+                if result.is_successful:
+                    print(f"Success with {config.llm.provider}!")
+                    break
+            except Exception as e:
+                print(f"Failed with {config.llm.provider}: {e}")
+        ```
+
+        ## Batch Processing
+
+        ```python
+        urls = [
+            "https://techcrunch.com/article1",
+            "https://venturebeat.com/article2",
+            "https://theverge.com/article3"
+        ]
+
+        results = extractor.extract_batch(urls, max_workers=3)
+        for result in results:
+            if result and result.is_successful:
+                print(f"{result.url}: {result.get_summary()}")
+        ```
+
+        For more examples, check the `examples/` directory in the repository.
+        EOF
+
+    - name: Build documentation
+      run: |
+        echo "📚 Building documentation..."
+        mkdocs build
+
+        # Add version info to built docs
+        echo "<!-- Generated for version ${{ steps.version.outputs.package_version }} at $(date) -->" >> site/index.html
+
+    - name: Setup Pages
+      if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
+      uses: actions/configure-pages@v4
+
+    - name: Upload documentation artifact
+      if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
+      uses: actions/upload-pages-artifact@v3
+      with:
+        path: ./site
+
+  deploy-docs:
+    name: Deploy Documentation
+    if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
+    needs: build-docs
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+    - name: Deploy to GitHub Pages
+      id: deployment
+      uses: actions/deploy-pages@v4
+
+    - name: Comment on PR with documentation link
+      if: github.event_name == 'pull_request'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: '📚 Documentation preview: ${{ steps.deployment.outputs.page_url }}'
+          })
