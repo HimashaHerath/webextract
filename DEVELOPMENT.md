@@ -110,14 +110,14 @@ pre-commit autoupdate
 
 **What the hooks do:**
 - **Black**: Auto-formats Python code to consistent style
-- **isort**: Sorts and organizes imports  
+- **isort**: Sorts and organizes imports
 - **Flake8**: Checks for code quality issues
 - **Bandit**: Scans for security vulnerabilities
 - **General**: Fixes trailing whitespace, file endings, etc.
 
 **Benefits:**
 - ✅ No more CI failures due to formatting
-- ✅ Consistent code style across all contributors  
+- ✅ Consistent code style across all contributors
 - ✅ Catches issues before they reach GitHub
 - ✅ Saves time in code reviews
 
@@ -318,7 +318,7 @@ git push origin v2.0.0
 Our GitHub Actions workflow automatically:
 
 1. **On Push to Main**: Runs tests and quality checks
-2. **On Tag Push (v*)**: 
+2. **On Tag Push (v*)**:
    - Runs full test suite
    - Builds package
    - Publishes to PyPI
@@ -445,4 +445,11 @@ Brief description of changes
 
 ---
 
-**Questions about development practices?** Open an issue or discussion - we're here to help! 🚀 
+**Questions about development practices?** Open an issue or discussion - we're here to help! 🚀
+
+## 🤖 Pre-commit Hooks Status
+
+✅ Pre-commit hooks are now installed and active!
+- All commits will be automatically formatted with Black
+- Code quality checks will run before each commit
+- This prevents CI formatting failures
