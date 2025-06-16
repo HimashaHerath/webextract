@@ -26,7 +26,7 @@ except FileNotFoundError:
 
 setup(
     name="llm-webextract",
-    version="1.2.0",
+    version="1.2.1",
     author="Himasha Herath",
     author_email="himasha626@gmail.com",
     description="AI-powered web content extraction with Large Language Models",
