@@ -45,7 +45,7 @@ def test_quick_extract(mock_extract):
 def test_version():
     """Test package version is available."""
     assert hasattr(webextract, "__version__")
-    assert webextract.__version__ == "1.2.1"
+    assert webextract.__version__ == "1.2.2"
 
 
 def test_author():
@@ -68,7 +68,7 @@ def test_extractor_has_required_methods():
 
 
 async def async_test_basic_functionality():
-    """Basic async test - placeholder for future async tests."""
+    """Test basic async functionality - placeholder for future async tests."""
     extractor = WebExtractor()
     # This is a placeholder - actual web scraping tests would require
     # either mocked responses or actual test URLs
