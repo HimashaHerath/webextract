@@ -5,6 +5,18 @@ All notable changes to LLM WebExtract will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.2] - 2024-12-18
+
+### 🆕 New Features
+- **Added**: `extract_with_ollama()` convenience function for simplified Ollama usage
+- **Enhanced**: Updated README with improved provider setup examples
+- **Added**: Quick one-liner examples for all providers in documentation
+
+### 📚 Documentation
+- **Updated**: README.md with `extract_with_ollama` function examples
+- **Improved**: Provider setup section with both ConfigBuilder and convenience function usage
+- **Enhanced**: Quick start examples now show multiple usage patterns
+
 ## [1.1.2] - 2024-12-16
 
 ### 🚀 Major Improvements
@@ -12,7 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 #### ✅ Multi-Provider LLM Support (BREAKING FIX)
 - **FIXED**: Multi-provider support now actually works (was broken in previous versions)
 - **Added**: Full OpenAI GPT integration with proper error handling
-- **Added**: Complete Anthropic Claude integration 
+- **Added**: Complete Anthropic Claude integration
 - **Added**: LLM provider factory for dynamic client creation
 - **Added**: Provider availability checking and fallback strategies
 

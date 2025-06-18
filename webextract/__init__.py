@@ -1,6 +1,6 @@
 """LLM WebExtract - AI-powered web content extraction using LLMs."""
 
-__version__ = "1.2.1"
+__version__ = "1.2.2"
 __author__ = "Himasha Herath"
 __description__ = "AI-powered web content extraction with Large Language Models"
 
@@ -74,6 +74,11 @@ __all__ = [
     "LLMError",
     "ConfigurationError",
     "AuthenticationError",
+    # Convenience functions
+    "quick_extract",
+    "extract_with_openai",
+    "extract_with_anthropic",
+    "extract_with_ollama",
 ]
 
 
@@ -149,5 +154,29 @@ def extract_with_anthropic(
     WebExtractor = getattr(current_module, "WebExtractor")  # noqa: F821
 
     config = ConfigBuilder().with_anthropic(api_key, model).build()
+    extractor = WebExtractor(config)
+    return extractor.extract(url)
+
+
+def extract_with_ollama(
+    url: str, model: str = "llama3.2", base_url: str = "http://localhost:11434", **kwargs
+):
+    """Quick extraction using Ollama models.
+
+    Args:
+        url: URL to extract from
+        model: Ollama model name
+        base_url: Ollama server base URL
+        **kwargs: Additional configuration options
+
+    Returns:
+        StructuredData: Extracted and processed data
+    """
+    _load_imports()
+    current_module = sys.modules[__name__]
+    ConfigBuilder = getattr(current_module, "ConfigBuilder")  # noqa: F821
+    WebExtractor = getattr(current_module, "WebExtractor")  # noqa: F821
+
+    config = ConfigBuilder().with_ollama(model, base_url).build()
     extractor = WebExtractor(config)
     return extractor.extract(url)

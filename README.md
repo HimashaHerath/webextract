@@ -13,7 +13,7 @@ Ever wanted to extract meaningful information from websites but got tired of par
 Instead of writing complex parsing rules for every website, this tool:
 
 1. **🌐 Scrapes webpages** using Playwright (handles modern JavaScript sites)
-2. **🧠 Feeds content to AI** (local via Ollama, or cloud via OpenAI/Anthropic)  
+2. **🧠 Feeds content to AI** (local via Ollama, or cloud via OpenAI/Anthropic)
 3. **📊 Returns structured data** - topics, entities, summaries, key facts, and more
 
 Think of it as having an AI assistant that reads web pages and summarizes them for you.
@@ -39,7 +39,7 @@ playwright install chromium
 
 # With cloud providers
 pip install llm-webextract[openai]     # For GPT models
-pip install llm-webextract[anthropic]  # For Claude models  
+pip install llm-webextract[anthropic]  # For Claude models
 pip install llm-webextract[all]        # Everything
 ```
 
@@ -60,6 +60,9 @@ import webextract
 result = webextract.quick_extract("https://techcrunch.com")
 print(f"Summary: {result.summary}")
 print(f"Topics: {result.topics}")
+
+# Or use the dedicated Ollama function
+result = webextract.extract_with_ollama("https://techcrunch.com", model="llama3.2")
 ```
 
 ## 🛠️ Configuration & Usage
@@ -68,8 +71,9 @@ print(f"Topics: {result.topics}")
 
 #### 🏠 Local with Ollama (Free & Private)
 ```python
-from webextract import WebExtractor, ConfigBuilder
+from webextract import WebExtractor, ConfigBuilder, extract_with_ollama
 
+# Using ConfigBuilder
 extractor = WebExtractor(
     ConfigBuilder()
     .with_ollama("llama3.2")  # or any model you have
@@ -77,10 +81,19 @@ extractor = WebExtractor(
 )
 
 result = extractor.extract("https://example.com")
+
+# Quick one-liner
+result = extract_with_ollama("https://example.com", model="llama3.2")
 ```
 
 #### ☁️ OpenAI GPT
 ```python
+from webextract import extract_with_openai
+
+# Quick one-liner
+result = extract_with_openai("https://example.com", api_key="sk-...", model="gpt-4o-mini")
+
+# Using ConfigBuilder
 extractor = WebExtractor(
     ConfigBuilder()
     .with_openai(api_key="sk-...", model="gpt-4o-mini")
@@ -88,8 +101,14 @@ extractor = WebExtractor(
 )
 ```
 
-#### 🧠 Anthropic Claude  
+#### 🧠 Anthropic Claude
 ```python
+from webextract import extract_with_anthropic
+
+# Quick one-liner
+result = extract_with_anthropic("https://example.com", api_key="sk-ant-...", model="claude-3-5-sonnet-20241022")
+
+# Using ConfigBuilder
 extractor = WebExtractor(
     ConfigBuilder()
     .with_anthropic(api_key="sk-ant-...", model="claude-3-5-sonnet-20241022")
@@ -160,7 +179,7 @@ schema = {
 }
 
 result = extractor.extract_with_custom_schema(
-    "https://amazon.com/product/...", 
+    "https://amazon.com/product/...",
     schema
 )
 ```
@@ -170,7 +189,7 @@ result = extractor.extract_with_custom_schema(
 ```python
 urls = [
     "https://techcrunch.com/article1",
-    "https://venturebeat.com/article2", 
+    "https://venturebeat.com/article2",
     "https://theverge.com/article3"
 ]
 
@@ -184,9 +203,9 @@ for result in results:
 
 ```python
 from webextract import (
-    WebExtractor, 
-    ExtractionError, 
-    ScrapingError, 
+    WebExtractor,
+    ExtractionError,
+    ScrapingError,
     LLMError,
     AuthenticationError
 )
@@ -211,7 +230,7 @@ config = (ConfigBuilder()
     .with_custom_prompt("""
         Focus on extracting:
         1. Financial metrics and numbers
-        2. Company performance indicators  
+        2. Company performance indicators
         3. Market trends and predictions
         4. Executive quotes and statements
     """)
@@ -226,7 +245,7 @@ graph LR
     B --> C[Content Cleaning]
     C --> D[LLM Processing]
     D --> E[Structured Data]
-    
+
     B --> F[JavaScript Handling]
     C --> G[Ad/Nav Removal]
     D --> H[JSON Validation]
@@ -243,7 +262,7 @@ graph LR
 - **Python 3.8+**
 - **One of:**
   - **Ollama** running locally (free, private)
-  - **OpenAI API key** (paid, powerful) 
+  - **OpenAI API key** (paid, powerful)
   - **Anthropic API key** (paid, great reasoning)
 
 ### Installing Ollama (Recommended for beginners)
@@ -255,7 +274,7 @@ curl -fsSL https://ollama.ai/install.sh | sh
 # Pull a model
 ollama pull llama3.2
 
-# Start the service  
+# Start the service
 ollama serve
 ```
 
@@ -292,7 +311,7 @@ We welcome contributions! Here's how to get started:
 ### For Contributors
 
 - 📖 Read our [Development Guide](DEVELOPMENT.md) for commit conventions and processes
-- 🐛 Report bugs by opening an issue with detailed reproduction steps  
+- 🐛 Report bugs by opening an issue with detailed reproduction steps
 - 💡 Suggest features through GitHub discussions
 - 🔧 Submit PRs following our coding standards
 
@@ -348,7 +367,7 @@ MIT License - feel free to use this in your projects!
 
 Built with these amazing tools:
 - [Ollama](https://ollama.ai/) - Local LLM inference
-- [Playwright](https://playwright.dev/) - Modern web scraping  
+- [Playwright](https://playwright.dev/) - Modern web scraping
 - [Beautiful Soup](https://www.crummy.com/software/BeautifulSoup/) - HTML parsing
 - [Pydantic](https://pydantic.dev/) - Data validation
 - [Typer](https://typer.tiangolo.com/) - CLI framework
@@ -361,5 +380,5 @@ Built with these amazing tools:
 
 ---
 
-**Got questions?** Open an issue - I'm happy to help!  
+**Got questions?** Open an issue - I'm happy to help!
 **Find this useful?** Give it a ⭐ - it really helps!
