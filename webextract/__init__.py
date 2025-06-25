@@ -1,6 +1,6 @@
 """LLM WebExtract - AI-powered web content extraction using LLMs."""
 
-__version__ = "1.2.3"
+__version__ = "1.2.4"
 __author__ = "Himasha Herath"
 __description__ = "AI-powered web content extraction with Large Language Models"
 
