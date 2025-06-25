@@ -22,11 +22,15 @@ app = typer.Typer(
 )
 console = Console()
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    handlers=[logging.FileHandler("webextract.log"), logging.StreamHandler()],
-)
+
+def setup_logging(verbose: bool = False):
+    """Set up logging configuration."""
+    level = logging.DEBUG if verbose else logging.INFO
+    logging.basicConfig(
+        level=level,
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        handlers=[logging.FileHandler("webextract.log"), logging.StreamHandler()],
+    )
 
 
 @app.command()
@@ -47,6 +51,8 @@ def extract(
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Verbose output"),
 ):
     """Extract structured data from a webpage."""
+    setup_logging(verbose)
+
     # Validate URL format
     from urllib.parse import urlparse
 
@@ -127,6 +133,16 @@ def extract(
         console.print("❌ Failed to extract data", style="bold red")
         raise typer.Exit(1)
 
+    # Check if extraction was actually successful
+    if not result.is_successful:
+        console.print("❌ Extraction failed", style="bold red")
+        if hasattr(result.structured_info, "get"):
+            error_msg = result.structured_info.get("error", "Unknown error")
+        else:
+            error_msg = getattr(result.structured_info, "error", "Unknown error")
+        console.print(f"Error: {error_msg}", style="red")
+        raise typer.Exit(1)
+
     # Output results
     try:
         if output_format.lower() == "pretty":
@@ -141,7 +157,14 @@ def extract(
             else:
                 console.print_json(data=json_output)
 
-        console.print("✅ Extraction completed successfully!", style="bold green")
+        # Show confidence score
+        confidence_color = (
+            "green" if result.confidence > 0.7 else "yellow" if result.confidence > 0.3 else "red"
+        )
+        console.print(
+            f"✅ Extraction completed successfully! (Confidence: {result.confidence:.2f})",
+            style=f"bold {confidence_color}",
+        )
 
     except Exception as e:
         console.print(f"❌ Error saving results: {e}", style="bold red")
@@ -149,11 +172,17 @@ def extract(
 
 
 @app.command()
-def test():
+def test(
+    model: str = typer.Option(settings.DEFAULT_MODEL, "--model", "-m", help="LLM model to test"),
+):
     """Test connection and model availability."""
-    console.print("🔧 Testing LLM WebExtract setup...", style="bold blue")
+    setup_logging(True)  # Always use verbose for test command
 
-    extractor = DataExtractor()
+    console.print("🔧 Testing LLM WebExtract setup...", style="bold blue")
+    console.print(f"🤖 Testing model: {model}")
+
+    config = ExtractionConfig(model_name=model)
+    extractor = DataExtractor(config)
 
     if extractor.test_connection():
         console.print("✅ All tests passed! You're ready to extract.", style="bold green")
@@ -180,7 +209,12 @@ def display_pretty_output(result):
     info_table = Table(show_header=False, box=None)
     info_table.add_row("URL:", result.url)
     info_table.add_row("Extracted:", result.extracted_at)
-    info_table.add_row("Confidence:", f"{result.confidence:.2f}")
+    confidence_color = (
+        "green" if result.confidence > 0.7 else "yellow" if result.confidence > 0.3 else "red"
+    )
+    info_table.add_row(
+        "Confidence:", f"[{confidence_color}]{result.confidence:.2f}[/{confidence_color}]"
+    )
     info_table.add_row("Title:", result.content.title or "N/A")
 
     console.print(Panel(info_table, title="📄 Extraction Info", border_style="blue"))

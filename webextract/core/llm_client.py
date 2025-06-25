@@ -244,7 +244,21 @@ class OllamaClient(BaseLLMClient):
         try:
             models = self.client.list()
             available_models = [model["name"] for model in models["models"]]
-            return self.model_name in available_models
+            logger.debug(f"Looking for model: '{self.model_name}'")
+            logger.debug(f"Available models: {available_models}")
+
+            # Check exact match first
+            if self.model_name in available_models:
+                return True
+
+            # If no exact match, check if any available model starts with our model name
+            # This handles cases like "llama3" matching "llama3:latest"
+            for available_model in available_models:
+                if available_model.startswith(self.model_name + ":"):
+                    logger.debug(f"Found partial match: {available_model} for {self.model_name}")
+                    return True
+
+            return False
         except Exception as e:
             logger.error(f"Failed to check Ollama model availability: {e}")
             return False
@@ -292,6 +306,7 @@ CRITICAL RULES:
                 try:
                     retry_count = settings.LLM_RETRY_ATTEMPTS
                     logger.info(f"Ollama generation attempt {attempt + 1}/{retry_count}")
+                    logger.debug(f"About to generate with model: '{self.model_name}'")
 
                     response = self.client.generate(
                         model=self.model_name,
@@ -334,6 +349,7 @@ CRITICAL RULES:
                         )
 
             # Fallback if all attempts failed but no exception was raised
+            logger.error("All LLM generation attempts failed, returning fallback")
             return self._create_safe_fallback(content[:200])
 
         except LLMError:

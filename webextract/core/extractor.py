@@ -33,6 +33,9 @@ class DataExtractor:
         else:
             self.config = config
             self.web_config = WebExtractConfig()
+            # Transfer model name from config to web_config
+            if hasattr(config, "model_name") and config.model_name:
+                self.web_config.llm.model_name = config.model_name
 
         # Create appropriate LLM client based on configuration
         try:
@@ -73,7 +76,10 @@ class DataExtractor:
             # Check model availability
             try:
                 if not self.llm_client.is_model_available():
+                    logger.error(f"Model {self.web_config.llm.model_name} is not available")
                     raise LLMError(f"Model {self.web_config.llm.model_name} is not available")
+            except LLMError:
+                raise  # Re-raise LLMError as-is
             except Exception as e:
                 logger.error(f"Failed to check model availability: {e}")
                 raise LLMError(f"Cannot verify model availability: {e}")
@@ -326,8 +332,9 @@ class DataExtractor:
         """Test connection to LLM service."""
         try:
             if not self.llm_client.is_model_available():
-                logger.error(f"Model {self.config.model_name} is not available")
-                print(f"❌ Model '{self.config.model_name}' is not available")
+                model_name = getattr(self.config, "model_name", self.web_config.llm.model_name)
+                logger.error(f"Model {model_name} is not available")
+                print(f"❌ Model '{model_name}' is not available")
 
                 # Try to list available models
                 try:
@@ -346,7 +353,8 @@ class DataExtractor:
 
                 return False
 
-            print(f"✅ Model '{self.config.model_name}' is available")
+            model_name = getattr(self.config, "model_name", self.web_config.llm.model_name)
+            print(f"✅ Model '{model_name}' is available")
 
             # Test with a simple extraction
             test_result = self.llm_client.generate_structured_data(
