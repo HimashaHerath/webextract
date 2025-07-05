@@ -79,31 +79,30 @@ class ConfigManager:
         Returns:
             Updated configuration
         """
+        import copy
+
         # Create a copy to avoid modifying the original
         builder = ConfigBuilder()
-
-        # Copy existing config
-        builder.llm_config = config.llm.model_copy()
-        builder.scraping_config = config.scraping.model_copy()
+        builder._config = copy.deepcopy(config)
 
         # Apply CLI overrides
         if model is not None:
-            builder.llm_config.model_name = model
+            builder._config.llm.model_name = model
 
         if max_content is not None:
-            builder.scraping_config.max_content_length = max_content
+            builder._config.scraping.max_content_length = max_content
 
         if custom_prompt is not None:
-            builder.llm_config.custom_prompt = custom_prompt
+            builder._config.llm.custom_prompt = custom_prompt
 
         if base_url is not None:
-            builder.llm_config.base_url = base_url
+            builder._config.llm.base_url = base_url
 
         if temperature is not None:
-            builder.llm_config.temperature = temperature
+            builder._config.llm.temperature = temperature
 
         if timeout is not None:
-            builder.llm_config.timeout = timeout
+            builder._config.llm.timeout = timeout
 
         return builder.build()
 

@@ -16,15 +16,16 @@ except PackageNotFoundError:
     from pathlib import Path
     import re
 
-    root = Path(__file__).resolve().parents[1]
-    pyproject = root / "pyproject.toml"
-    version_pattern = re.compile(r"^version\s*=\s*['\"](.+?)['\"]", re.M)
     try:
+        root = Path(__file__).resolve().parents[1]
+        pyproject = root / "pyproject.toml"
+        version_pattern = re.compile(r'^version\s*=\s*["\'](.+?)["\']', re.M)
         text = pyproject.read_text()
         match = version_pattern.search(text)
         __version__ = match.group(1) if match else "0.0.0"
-    except Exception:  # pragma: no cover - failure fallback
+    except Exception:  # pragma: no cover - fallback
         __version__ = "0.0.0"
+
 __author__ = "Himasha Herath"
 __description__ = "AI-powered web content extraction with Large Language Models"
 

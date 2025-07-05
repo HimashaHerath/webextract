@@ -58,8 +58,8 @@ llm-webextract test
 import webextract
 
 result = webextract.quick_extract("https://techcrunch.com")
-print(f"Summary: {result.summary}")
-print(f"Topics: {result.topics}")
+print(f"Summary: {result.get_summary()}")
+print(f"Topics: {result.get_topics()}")
 
 # Or use the dedicated Ollama function
 result = webextract.extract_with_ollama("https://techcrunch.com", model="llama3.2")
