@@ -12,7 +12,14 @@ Requirements:
 - Multiple models available (gemma3:27b, gemma3:8b, etc.)
 """
 
+import sys
 import time
+from pathlib import Path
+
+# Add the tests directory to the path for test data access
+sys.path.insert(0, str(Path(__file__).parent.parent / "tests"))
+
+from example_test_data import TestDataCategories
 
 from webextract import ConfigBuilder, WebExtractor
 
@@ -21,8 +28,9 @@ def main():
     print("⚡ WebExtract - Advanced Configuration Example")
     print("=" * 60)
 
-    # Test URL
-    url = "https://dev.to/nodeshiftcloud/claude-4-opus-vs-sonnet-benchmarks-and-dev-workflow-with-claude-code-11fa"
+    # Use reliable test URL instead of hardcoded URL that may break
+    test_urls = TestDataCategories.get_content_types()
+    url = test_urls["news"]
 
     # Configuration 1: Custom prompt for specific data extraction
     print("\n1️⃣ Custom Prompt Configuration:")

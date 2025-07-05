@@ -6,8 +6,9 @@ import re
 from abc import ABC, abstractmethod
 from typing import Any, Dict, Optional
 
-from ..config.settings import settings
-from .exceptions import LLMError
+from ..config import get_default_config
+from .exceptions import AuthenticationError, ErrorHandler, LLMError, ModelNotAvailableError
+from .json_parser import JSONParser, JSONValidator, StructuredPromptBuilder
 
 try:
     import ollama
@@ -20,10 +21,13 @@ logger = logging.getLogger(__name__)
 class BaseLLMClient(ABC):
     """Abstract base class for LLM clients."""
 
-    def __init__(self, model_name: str):
+    def __init__(self, model_name: str, config=None):
         """Initialize the base LLM client with model name."""
         self.model_name = model_name
-        self.max_content_length = settings.MAX_CONTENT_LENGTH
+        self.config = config or get_default_config()
+        self.max_content_length = self.config.scraping.max_content_length
+        self.json_parser = JSONParser()
+        self.prompt_builder = StructuredPromptBuilder()
 
     @abstractmethod
     def is_model_available(self) -> bool:
@@ -49,164 +53,31 @@ class BaseLLMClient(ABC):
         """Extract data according to a specific schema."""
         return self.generate_structured_data(content, schema=schema)
 
-    def _get_improved_prompt(self) -> str:
-        """Get improved default prompt for better JSON generation."""
-        return """Extract the following information from the content:
-
-{
-  "summary": "A clear, concise summary of the main points (required, 2-3 sentences)",
-  "topics": ["array of main topics or themes discussed"],
-  "category": "primary category (technology/business/news/education/"
-              "entertainment/other)",
-  "sentiment": "overall tone (positive/negative/neutral)",
-  "entities": {
-    "people": ["array of person names mentioned"],
-    "organizations": ["array of organization/company names"],
-    "locations": ["array of locations/places mentioned"]
-  },
-  "key_facts": ["array of important facts or claims"],
-  "important_dates": ["array of dates mentioned with context"],
-  "statistics": ["array of numbers, percentages, or metrics mentioned"]
-}
-
-Return this EXACT structure with these EXACT field names.
-ALL fields must be present. Use empty arrays [] if no data found."""
+    def _get_improved_prompt(self, schema: Optional[Dict[str, Any]] = None) -> str:
+        """Get improved prompt for reliable JSON generation."""
+        return self.prompt_builder.create_extraction_prompt(schema=schema)
 
     def _create_schema_prompt(self, schema: Dict[str, Any]) -> str:
         """Create a prompt from a provided schema."""
-        return f"""Extract information according to this schema:
-
-{json.dumps(schema, indent=2)}
-
-Return data matching this EXACT structure with ALL fields present.
-Use appropriate empty values (empty strings, empty arrays) for missing data."""
+        return self.prompt_builder.create_extraction_prompt(schema=schema)
 
     def _parse_json_response(self, response_text: str) -> Optional[Dict[str, Any]]:
-        """Parse JSON from LLM response with multiple strategies."""
-        if not response_text:
-            return None
-
-        # Strategy 1: Direct parsing
-        try:
-            return json.loads(response_text)
-        except json.JSONDecodeError:
-            pass
-
-        # Strategy 2: Extract JSON from text
-        json_pattern = r"\{[^{}]*\{[^{}]*\}[^{}]*\}|\{[^{}]*\}"
-        json_match = re.search(json_pattern, response_text, re.DOTALL)
-        if json_match:
-            try:
-                return json.loads(json_match.group())
-            except json.JSONDecodeError:
-                pass
-
-        # Strategy 3: Clean and parse
-        cleaned = self._clean_json_text(response_text)
-        if cleaned:
-            try:
-                return json.loads(cleaned)
-            except json.JSONDecodeError as e:
-                logger.warning(f"JSON decode error after cleaning: {e}")
-
-        return None
-
-    def _clean_json_text(self, text: str) -> Optional[str]:
-        """Clean potential JSON text with safer approach."""
-        # Remove markdown code blocks
-        text = re.sub(r"```(?:json)?\s*\n?", "", text)
-        text = re.sub(r"\n?```", "", text)
-        text = text.strip()
-
-        # Find JSON boundaries
-        start = text.find("{")
-        end = text.rfind("}")
-
-        if start == -1 or end == -1 or end <= start:
-            return None
-
-        json_text = text[start : end + 1]
-
-        # Safe replacements
-        # Fix common LLM mistakes
-        json_text = re.sub(r",\s*}", "}", json_text)  # Remove trailing commas
-        json_text = re.sub(r",\s*]", "]", json_text)  # Remove trailing commas in arrays
-
-        # Fix newlines and tabs in strings (but not between JSON elements)
-        def fix_string_newlines(match):
-            string_content = match.group(1)
-            string_content = (
-                string_content.replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t")
-            )
-            return f'"{string_content}"'
-
-        # This regex matches strings but avoids the complexities of escaped quotes
-        string_pattern = r'"([^"\\]*(?:\\.[^"\\]*)*)"'
-        json_text = re.sub(string_pattern, fix_string_newlines, json_text)
-
-        return json_text
+        """Parse JSON from LLM response using robust parser."""
+        return self.json_parser.parse_response(response_text)
 
     def _validate_extraction_result(
         self,
         result: Dict[str, Any],
         schema: Optional[Dict[str, Any]] = None,
     ) -> bool:
-        """Validate extraction result against schema or default requirements."""
-        if not isinstance(result, dict):
-            return False
+        """Validate extraction result using robust validator."""
+        is_valid, fixed_result = JSONValidator.validate_and_fix(result, schema)
 
-        if schema:
-            return self._validate_against_schema(result, schema)
+        # Update result in-place with fixes
+        result.clear()
+        result.update(fixed_result)
 
-        # Default validation
-        required_fields = ["summary"]
-        if not all(field in result and result[field] for field in required_fields):
-            return False
-
-        # Check for expected structure
-        expected_structure = {
-            "summary": str,
-            "topics": list,
-            "category": str,
-            "sentiment": str,
-            "entities": dict,
-            "key_facts": list,
-            "important_dates": list,
-            "statistics": list,
-        }
-
-        for field, expected_type in expected_structure.items():
-            if field in result:
-                if not isinstance(result[field], expected_type):
-                    # Try to fix common type mismatches
-                    if expected_type == list and isinstance(result[field], str):
-                        result[field] = [result[field]] if result[field] else []
-                    elif expected_type == str and result[field] is None:
-                        result[field] = ""
-                    else:
-                        logger.warning(f"Field {field} has wrong type: {type(result[field])}")
-
-        return True
-
-    def _validate_against_schema(self, result: Dict[str, Any], schema: Dict[str, Any]) -> bool:
-        """Validate result against provided schema."""
-        for key, value in schema.items():
-            if key not in result:
-                logger.warning(f"Missing required field: {key}")
-                return False
-
-            # Basic type checking based on schema value
-            if isinstance(value, str):
-                if not isinstance(result[key], str):
-                    result[key] = str(result[key]) if result[key] is not None else ""
-            elif isinstance(value, list):
-                if not isinstance(result[key], list):
-                    result[key] = [result[key]] if result[key] else []
-            elif isinstance(value, dict):
-                if not isinstance(result[key], dict):
-                    result[key] = {}
-
-        return True
+        return is_valid
 
     def _create_safe_fallback(self, content_preview: str) -> Dict[str, Any]:
         """Create a safe fallback response with proper structure."""
@@ -228,16 +99,26 @@ class OllamaClient(BaseLLMClient):
 
     def __init__(self, model_name: str = None, base_url: str = None):
         """Initialize the Ollama client with model name and base URL."""
-        super().__init__(model_name or settings.DEFAULT_MODEL)
-        self.base_url = base_url or settings.OLLAMA_BASE_URL
+        config = get_default_config()
+        super().__init__(model_name or config.llm.model_name, config)
+        self.base_url = base_url or config.llm.base_url
 
         if ollama is None:
-            raise LLMError("Ollama package not installed. Install with: pip install ollama")
+            raise LLMError(
+                "Ollama package not installed",
+                provider="ollama",
+                suggestions=["Install with: pip install ollama"],
+            )
 
         try:
             self.client = ollama.Client(host=self.base_url)
         except Exception as e:
-            raise LLMError(f"Failed to initialize Ollama client: {e}")
+            raise LLMError(
+                "Failed to initialize Ollama client",
+                provider="ollama",
+                context={"base_url": self.base_url},
+                original_error=e,
+            )
 
     def is_model_available(self) -> bool:
         """Check if the specified model is available."""
@@ -261,7 +142,13 @@ class OllamaClient(BaseLLMClient):
             return False
         except Exception as e:
             logger.error(f"Failed to check Ollama model availability: {e}")
-            return False
+            raise ModelNotAvailableError(
+                "Cannot check model availability",
+                requested_model=self.model_name,
+                provider="ollama",
+                context={"base_url": self.base_url},
+                original_error=e,
+            )
 
     def generate_structured_data(
         self,
@@ -275,7 +162,7 @@ class OllamaClient(BaseLLMClient):
             if schema:
                 prompt = self._create_schema_prompt(schema)
             else:
-                prompt = custom_prompt or self._get_improved_prompt()
+                prompt = custom_prompt or self._get_improved_prompt(schema)
 
             # Truncate content if needed
             truncated_content = content[: self.max_content_length]
@@ -302,9 +189,9 @@ CRITICAL RULES:
 6. Use empty strings "" for missing text data
 7. Escape any quotes inside string values with \\"""
 
-            for attempt in range(settings.LLM_RETRY_ATTEMPTS):
+            for attempt in range(self.config.llm.retry_attempts):
                 try:
-                    retry_count = settings.LLM_RETRY_ATTEMPTS
+                    retry_count = self.config.llm.retry_attempts
                     logger.info(f"Ollama generation attempt {attempt + 1}/{retry_count}")
                     logger.debug(f"About to generate with model: '{self.model_name}'")
 
@@ -312,8 +199,8 @@ CRITICAL RULES:
                         model=self.model_name,
                         prompt=full_prompt,
                         options={
-                            "temperature": settings.LLM_TEMPERATURE,
-                            "num_predict": settings.MAX_TOKENS,
+                            "temperature": self.config.llm.temperature,
+                            "num_predict": self.config.llm.max_tokens,
                             "format": "json",  # Request JSON format if model supports it
                         },
                     )
@@ -341,11 +228,19 @@ CRITICAL RULES:
                 except Exception as e:
                     logger.error(f"Ollama generation failed (attempt {attempt + 1}): {e}")
                     if "connection" in str(e).lower():
-                        raise LLMError(f"Cannot connect to Ollama server at {self.base_url}: {e}")
-                    if attempt == settings.LLM_RETRY_ATTEMPTS - 1:
-                        retry_count = settings.LLM_RETRY_ATTEMPTS
                         raise LLMError(
-                            f"Ollama processing failed after {retry_count} attempts: {e}"
+                            "Cannot connect to Ollama server",
+                            provider="ollama",
+                            context={"base_url": self.base_url, "model_name": self.model_name},
+                            original_error=e,
+                        )
+                    if attempt == self.config.llm.retry_attempts - 1:
+                        retry_count = self.config.llm.retry_attempts
+                        raise LLMError(
+                            f"Ollama processing failed after {retry_count} attempts",
+                            provider="ollama",
+                            context={"model_name": self.model_name, "attempts": retry_count},
+                            original_error=e,
                         )
 
             # Fallback if all attempts failed but no exception was raised
@@ -355,7 +250,12 @@ CRITICAL RULES:
         except LLMError:
             raise
         except Exception as e:
-            raise LLMError(f"Unexpected error in Ollama processing: {e}")
+            raise ErrorHandler.handle_with_context(
+                "generate_structured_data",
+                {"model_name": self.model_name, "provider": "ollama"},
+                e,
+                ["Check Ollama server status", "Verify model availability"],
+            )
 
     def summarize_content(self, content: str, max_length: int = 200) -> str:
         """Generate a brief summary of the content using Ollama."""
@@ -385,6 +285,7 @@ CRITICAL RULES:
 
         except Exception as e:
             logger.error(f"Failed to generate Ollama summary: {e}")
+            # For summarization, provide fallback instead of raising
             if len(content) > max_length:
                 preview = content[: max_length - 3] + "..."
             else:

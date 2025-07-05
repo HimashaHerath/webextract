@@ -2,6 +2,14 @@
 """Comprehensive usage examples for LLM WebExtract package"""
 
 import asyncio
+import os
+import sys
+from pathlib import Path
+
+# Add the tests directory to the path for test data access
+sys.path.insert(0, str(Path(__file__).parent.parent / "tests"))
+
+from example_test_data import TestDataCategories
 
 import webextract
 from webextract import Extractor
@@ -12,10 +20,10 @@ async def example_basic_url_extraction():
     print("🔹 Basic Example")
     print("-" * 20)
 
+    # Use reliable test URL instead of hardcoded URL
+    test_urls = TestDataCategories.get_content_types()
     extractor = Extractor()
-    result = await extractor.extract(
-        "https://example.com", {"summary": "Brief summary of the page"}
-    )
+    result = await extractor.extract(test_urls["news"], {"summary": "Brief summary of the page"})
     print(f"Summary: {result.get('summary', 'N/A')}")
 
 
@@ -24,7 +32,8 @@ async def example_batch_processing():
     print("\n🔹 Batch Processing")
     print("-" * 18)
 
-    urls = ["https://httpbin.org/html", "https://example.com"]
+    # Use reliable test URLs for batch processing
+    urls = TestDataCategories.get_batch_urls(2)
     schema = {"title": "Page title", "description": "Brief description"}
 
     extractor = Extractor()
@@ -46,8 +55,10 @@ async def example_custom_schema():
         "key_points": "List 3 key points from the content",
     }
 
+    # Use reliable test URL
+    test_urls = TestDataCategories.get_content_types()
     extractor = Extractor()
-    result = await extractor.extract("https://example.com", schema)
+    result = await extractor.extract(test_urls["blog"], schema)
 
     print(f"Title: {result.get('title', 'N/A')}")
     print(f"Topic: {result.get('main_topic', 'N/A')}")
@@ -58,9 +69,11 @@ async def example_chunked_extraction():
     print("\n🔹 Chunked Extraction")
     print("-" * 20)
 
+    # Use reliable test URL for large content testing
+    test_urls = TestDataCategories.get_edge_cases()
     extractor = Extractor()
     result = await extractor.extract(
-        "https://en.wikipedia.org/wiki/Artificial_intelligence",
+        test_urls["large_content"],
         {
             "summary": "Brief summary of AI",
             "history": "Brief history of AI development",
@@ -77,7 +90,9 @@ def basic_sync_example():
     print("-" * 20)
 
     try:
-        result = webextract.quick_extract("https://example.com")
+        # Use reliable test URL
+        test_urls = TestDataCategories.get_content_types()
+        result = webextract.quick_extract(test_urls["news"])
         print(f"Result: {result}")
     except Exception as e:
         print(f"Note: Legacy API may not be available: {e}")

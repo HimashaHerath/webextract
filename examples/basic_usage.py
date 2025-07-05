@@ -11,6 +11,15 @@ Requirements:
 - OR OpenAI/Anthropic API key
 """
 
+import os
+import sys
+from pathlib import Path
+
+# Add the tests directory to the path for test data access
+sys.path.insert(0, str(Path(__file__).parent.parent / "tests"))
+
+from example_test_data import TestDataCategories
+
 import webextract
 from webextract import ConfigBuilder, ConfigProfiles, WebExtractor
 
@@ -21,10 +30,13 @@ def main():
 
     # Method 1: Quick extraction (simplest)
     print("\n⚡ Quick Extraction:")
-    url = "https://techcrunch.com/2024/01/15/ai-industry-trends/"
+    # Use reliable test URL instead of hardcoded URL that may break
+    test_urls = TestDataCategories.get_content_types()
+    url = test_urls["news"]
 
     try:
         print(f"🔍 Extracting from: {url}")
+        print("   (Using reliable test URL from test data server)")
         result = webextract.quick_extract(url)  # Uses Ollama by default
 
         if result and result.is_successful:
@@ -41,6 +53,7 @@ def main():
         print("   1. Make sure Ollama is running: ollama serve")
         print("   2. Check available models: ollama list")
         print("   3. Pull required model: ollama pull llama3.2")
+        print("   4. Test data server may be unavailable - fallback URL used")
 
     # Method 2: Using pre-configured profiles
     print(f"\n" + "=" * 50)

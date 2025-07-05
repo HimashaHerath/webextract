@@ -1,0 +1,49 @@
+# GitHub Workflows Configuration Reference
+#
+# This file documents the configuration options used in GitHub workflows.
+# It serves as a reference for maintaining and updating workflow settings.
+
+# Python versions to test against
+python_versions:
+  - "3.8"
+  - "3.9"
+  - "3.10"
+  - "3.11"
+  - "3.12"
+
+# Default Python version for single-version jobs
+default_python_version: "3.11"
+
+# Cache version - increment when dependencies change significantly
+cache_version: "v1"
+
+# Code quality tools and their versions
+quality_tools:
+  black: "latest"
+  isort: "latest"
+  flake8: "latest"
+  mypy: "latest"
+  safety: "latest"
+  bandit: "latest"
+
+# Test configuration
+test_config:
+  timeout_minutes: 30
+  coverage_threshold: 80
+  pytest_args: "--strict-markers --strict-config"
+
+# Build configuration
+build_config:
+  artifact_retention_days: 90
+  test_artifact_retention_days: 30
+
+# Directories to format/lint
+target_directories:
+  - webextract/
+  - examples/
+  - tests/
+
+# Security scan configuration
+security_config:
+  continue_on_error: true
+  upload_reports: true

@@ -30,7 +30,16 @@ def create_llm_client(config: WebExtractConfig) -> BaseLLMClient:
 
         elif provider == "openai":
             if not config.llm.api_key:
-                raise ConfigurationError("OpenAI API key is required but not provided")
+                raise ConfigurationError(
+                    "OpenAI API key is required but not provided",
+                    config_field="llm.api_key",
+                    expected_type="string",
+                    suggestions=[
+                        "Set OPENAI_API_KEY environment variable",
+                        "Provide api_key in configuration",
+                        "Check your OpenAI account for API key",
+                    ],
+                )
 
             try:
                 from .openai_client import OpenAIClient
@@ -41,29 +50,65 @@ def create_llm_client(config: WebExtractConfig) -> BaseLLMClient:
                     base_url=config.llm.base_url,
                 )
             except ImportError as e:
-                raise LLMError(f"OpenAI dependencies not installed: {e}")
+                raise LLMError(
+                    "OpenAI dependencies not installed",
+                    provider="openai",
+                    suggestions=["Install with: pip install openai"],
+                    original_error=e,
+                )
 
         elif provider == "anthropic":
             if not config.llm.api_key:
-                raise ConfigurationError("Anthropic API key is required but not provided")
+                raise ConfigurationError(
+                    "Anthropic API key is required but not provided",
+                    config_field="llm.api_key",
+                    expected_type="string",
+                    suggestions=[
+                        "Set ANTHROPIC_API_KEY environment variable",
+                        "Provide api_key in configuration",
+                        "Check your Anthropic account for API key",
+                    ],
+                )
 
             try:
                 from .anthropic_client import AnthropicClient
 
                 return AnthropicClient(api_key=config.llm.api_key, model_name=config.llm.model_name)
             except ImportError as e:
-                raise LLMError(f"Anthropic dependencies not installed: {e}")
+                raise LLMError(
+                    "Anthropic dependencies not installed",
+                    provider="anthropic",
+                    suggestions=["Install with: pip install anthropic"],
+                    original_error=e,
+                )
 
         else:
             raise ConfigurationError(
-                f"Unsupported LLM provider: {provider}. "
-                f"Supported providers: ollama, openai, anthropic"
+                f"Unsupported LLM provider: {provider}",
+                config_field="llm.provider",
+                provided_value=provider,
+                suggestions=[
+                    "Use 'ollama' for local models",
+                    "Use 'openai' for OpenAI GPT models",
+                    "Use 'anthropic' for Claude models",
+                    "Check configuration documentation",
+                ],
             )
 
     except (ConfigurationError, LLMError):
         raise
     except Exception as e:
-        raise LLMError(f"Failed to create {provider} client: {e}")
+        raise LLMError(
+            f"Failed to create {provider} client",
+            provider=provider,
+            context={"model_name": config.llm.model_name},
+            suggestions=[
+                f"Check {provider} service status",
+                "Verify configuration parameters",
+                "Check network connectivity",
+            ],
+            original_error=e,
+        )
 
 
 def get_available_providers() -> dict:

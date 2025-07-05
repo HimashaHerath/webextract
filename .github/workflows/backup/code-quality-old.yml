@@ -1,0 +1,157 @@
+name: Code Quality
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  PYTHON_VERSION: "3.11"
+
+jobs:
+  format-check:
+    name: Format Check
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+
+    - name: Cache pip dependencies
+      uses: actions/cache@v4
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-format-${{ hashFiles('**/pyproject.toml') }}
+
+    - name: Install formatting tools
+      run: |
+        python -m pip install --upgrade pip
+        pip install black isort
+
+    - name: Check code formatting with black
+      run: |
+        echo "::group::Black formatting check"
+        black --check --diff webextract/ examples/ tests/
+        echo "::endgroup::"
+
+    - name: Check import sorting with isort
+      run: |
+        echo "::group::Import sorting check"
+        isort --check-only --diff webextract/ examples/ tests/
+        echo "::endgroup::"
+
+  lint:
+    name: Lint Analysis
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+
+    - name: Cache pip dependencies
+      uses: actions/cache@v4
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-lint-${{ hashFiles('**/pyproject.toml') }}
+
+    - name: Install linting tools
+      run: |
+        python -m pip install --upgrade pip
+        pip install flake8 mypy
+
+    - name: Lint with flake8
+      run: |
+        echo "::group::Flake8 linting"
+        flake8 webextract/ --config .flake8 --tee --output-file=flake8-report.txt
+        echo "::endgroup::"
+
+    - name: Type check with mypy
+      continue-on-error: true
+      run: |
+        echo "::group::MyPy type checking"
+        mypy webextract/ --ignore-missing-imports --no-strict-optional --txt-report mypy-report
+        echo "::endgroup::"
+
+    - name: Upload lint reports
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: lint-reports
+        path: |
+          flake8-report.txt
+          mypy-report/
+
+  auto-format:
+    name: Auto-format Code
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        ref: ${{ github.head_ref }}
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+
+    - name: Install formatting tools
+      run: |
+        python -m pip install --upgrade pip
+        pip install black isort
+
+    - name: Format code with black
+      run: |
+        black webextract/ examples/ tests/
+
+    - name: Sort imports with isort
+      run: |
+        isort webextract/ examples/ tests/
+
+    - name: Check for changes
+      id: verify-changed-files
+      run: |
+        if [ -n "$(git status --porcelain)" ]; then
+          echo "changed=true" >> $GITHUB_OUTPUT
+        else
+          echo "changed=false" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Commit changes
+      if: steps.verify-changed-files.outputs.changed == 'true'
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        git add -A
+        git commit -m "🤖 Auto-format code with black and isort
+
+        🤖 Generated with [Claude Code](https://claude.ai/code)
+
+        Co-Authored-By: Claude <noreply@anthropic.com>" || exit 0
+        git push
+
+    - name: Comment on PR
+      if: steps.verify-changed-files.outputs.changed == 'true'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: '🤖 **Auto-formatted code**\n\nI automatically formatted your code with `black` and `isort` to maintain consistent code style. The changes have been pushed to this PR.'
+          })

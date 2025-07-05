@@ -135,47 +135,104 @@ class ConfigBuilder:
         return self._config
 
 
-# Legacy support
-class Settings:
-    """Legacy settings class for backward compatibility."""
+# Default global configuration instance
+_default_config = None
+
+
+def get_default_config() -> WebExtractConfig:
+    """Get the default configuration instance."""
+    global _default_config
+    if _default_config is None:
+        _default_config = WebExtractConfig.from_env()
+    return _default_config
+
+
+def set_default_config(config: WebExtractConfig):
+    """Set the default configuration instance."""
+    global _default_config
+    _default_config = config
+
+
+def get_http_headers(custom_user_agent: str = None) -> dict:
+    """Get HTTP headers with rotating user agents."""
+    import random
+
+    config = get_default_config()
+    user_agent = custom_user_agent or random.choice(config.scraping.user_agents)
+
+    return {
+        "User-Agent": user_agent,
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Accept-Encoding": "gzip, deflate, br",
+        "DNT": "1",
+        "Connection": "keep-alive",
+        "Upgrade-Insecure-Requests": "1",
+    }
+
+
+# Legacy compatibility layer - will be removed in future versions
+class _LegacySettings:
+    """Legacy settings wrapper for backward compatibility."""
 
     def __init__(self):
-        # Load from environment with defaults
-        self.OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
-        self.DEFAULT_MODEL = os.getenv("DEFAULT_MODEL", "llama3.2")
-        self.REQUEST_TIMEOUT = int(os.getenv("REQUEST_TIMEOUT", "30"))
-        self.MAX_CONTENT_LENGTH = int(os.getenv("MAX_CONTENT_LENGTH", "10000"))
-        self.RETRY_ATTEMPTS = int(os.getenv("RETRY_ATTEMPTS", "3"))
-        self.RETRY_DELAY = float(os.getenv("RETRY_DELAY", "2.0"))
-        self.REQUEST_DELAY = float(os.getenv("REQUEST_DELAY", "1.0"))
-        self.LLM_TEMPERATURE = float(os.getenv("LLM_TEMPERATURE", "0.1"))
-        self.MAX_TOKENS = int(os.getenv("MAX_TOKENS", "4000"))
-        self.LLM_RETRY_ATTEMPTS = int(os.getenv("LLM_RETRY_ATTEMPTS", "3"))
+        import warnings
 
-        self.USER_AGENTS = [
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-            "Chrome/121.0.0.0 Safari/537.36",
-            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
-            "Chrome/121.0.0.0 Safari/537.36",
-        ]
+        warnings.warn(
+            "The Settings class is deprecated. Use WebExtractConfig instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+
+    @property
+    def OLLAMA_BASE_URL(self):
+        return get_default_config().llm.base_url
+
+    @property
+    def DEFAULT_MODEL(self):
+        return get_default_config().llm.model_name
+
+    @property
+    def REQUEST_TIMEOUT(self):
+        return get_default_config().scraping.request_timeout
+
+    @property
+    def MAX_CONTENT_LENGTH(self):
+        return get_default_config().scraping.max_content_length
+
+    @property
+    def RETRY_ATTEMPTS(self):
+        return get_default_config().scraping.retry_attempts
+
+    @property
+    def RETRY_DELAY(self):
+        return get_default_config().scraping.retry_delay
+
+    @property
+    def REQUEST_DELAY(self):
+        return get_default_config().scraping.request_delay
+
+    @property
+    def LLM_TEMPERATURE(self):
+        return get_default_config().llm.temperature
+
+    @property
+    def MAX_TOKENS(self):
+        return get_default_config().llm.max_tokens
+
+    @property
+    def LLM_RETRY_ATTEMPTS(self):
+        return get_default_config().llm.retry_attempts
+
+    @property
+    def USER_AGENTS(self):
+        return get_default_config().scraping.user_agents
 
     @staticmethod
     def get_headers(custom_user_agent: str = None) -> dict:
         """Get HTTP headers."""
-        import random
-
-        user_agent = custom_user_agent or random.choice(settings.USER_AGENTS)
-
-        return {
-            "User-Agent": user_agent,
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-            "Accept-Language": "en-US,en;q=0.9",
-            "Accept-Encoding": "gzip, deflate, br",
-            "DNT": "1",
-            "Connection": "keep-alive",
-            "Upgrade-Insecure-Requests": "1",
-        }
+        return get_http_headers(custom_user_agent)
 
 
-# Global settings instance
-settings = Settings()
+# Deprecated global settings instance
+settings = _LegacySettings()

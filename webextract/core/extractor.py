@@ -5,7 +5,8 @@ from datetime import datetime
 from typing import Dict, List, Optional, Union
 from urllib.parse import urlparse
 
-from ..config.settings import WebExtractConfig
+from ..config import WebExtractConfig, get_default_config
+from .confidence_scorer import ConfidenceConfig, ConfidenceScorer
 from .exceptions import ConfigurationError, ExtractionError, LLMError, ScrapingError
 from .llm_factory import create_llm_client
 from .models import ExtractedContent, ExtractionConfig, StructuredData
@@ -17,33 +18,54 @@ logger = logging.getLogger(__name__)
 class DataExtractor:
     """Main class for extracting structured data from web pages."""
 
-    def __init__(self, config: Union[ExtractionConfig, WebExtractConfig] = None):
-        """Initialize the data extractor with configuration."""
-        if config is None:
-            self.config = ExtractionConfig()
-            self.web_config = WebExtractConfig()
-        elif isinstance(config, WebExtractConfig):
-            self.web_config = config
-            # Convert WebExtractConfig to ExtractionConfig for backward compatibility
-            self.config = ExtractionConfig(
-                model_name=config.llm.model_name,
-                max_content_length=config.scraping.max_content_length,
-                custom_prompt=config.llm.custom_prompt,
-            )
-        else:
-            self.config = config
-            self.web_config = WebExtractConfig()
-            # Transfer model name from config to web_config
-            if hasattr(config, "model_name") and config.model_name:
-                self.web_config.llm.model_name = config.model_name
+    def __init__(
+        self,
+        config: Union[WebExtractConfig, ExtractionConfig, None] = None,
+        confidence_config: Optional[ConfidenceConfig] = None,
+    ):
+        """
+        Initialize the data extractor with unified configuration.
 
-        # Create appropriate LLM client based on configuration
+        Args:
+            config: WebExtractConfig (preferred) or ExtractionConfig (deprecated)
+            confidence_config: Optional confidence scoring configuration
+        """
+        # Handle legacy ExtractionConfig for backward compatibility
+        if isinstance(config, ExtractionConfig):
+            logger.warning("ExtractionConfig is deprecated. Please use WebExtractConfig instead.")
+            config = self._convert_legacy_config(config)
+
+        # Use provided config or get default
+        self.config = config or get_default_config()
+
+        # Initialize confidence scorer
+        self.confidence_scorer = ConfidenceScorer(confidence_config)
+
+        # Create LLM client based on unified configuration
         try:
-            self.llm_client = create_llm_client(self.web_config)
+            self.llm_client = create_llm_client(self.config)
         except (ConfigurationError, LLMError) as e:
             logger.error(f"Failed to create LLM client: {e}")
             raise e
+
         self._extraction_cache = {}  # Simple cache for repeated URLs
+
+    def _convert_legacy_config(self, legacy_config: ExtractionConfig) -> WebExtractConfig:
+        """Convert legacy ExtractionConfig to WebExtractConfig."""
+        # Get default config and update with legacy values
+        config = get_default_config()
+
+        # Map legacy fields to new config structure
+        if hasattr(legacy_config, "model_name") and legacy_config.model_name:
+            config.llm.model_name = legacy_config.model_name
+
+        if hasattr(legacy_config, "max_content_length") and legacy_config.max_content_length:
+            config.scraping.max_content_length = legacy_config.max_content_length
+
+        if hasattr(legacy_config, "custom_prompt") and legacy_config.custom_prompt:
+            config.llm.custom_prompt = legacy_config.custom_prompt
+
+        return config
 
     def extract(
         self,
@@ -76,8 +98,8 @@ class DataExtractor:
             # Check model availability
             try:
                 if not self.llm_client.is_model_available():
-                    logger.error(f"Model {self.web_config.llm.model_name} is not available")
-                    raise LLMError(f"Model {self.web_config.llm.model_name} is not available")
+                    logger.error(f"Model {self.config.llm.model_name} is not available")
+                    raise LLMError(f"Model {self.config.llm.model_name} is not available")
             except LLMError:
                 raise  # Re-raise LLMError as-is
             except Exception as e:
@@ -97,8 +119,10 @@ class DataExtractor:
             except Exception as e:
                 raise LLMError(f"LLM processing failed: {e}")
 
-            # Calculate confidence
-            confidence = self._calculate_confidence(extracted_content, structured_info)
+            # Calculate confidence using improved scorer
+            confidence = self.confidence_scorer.calculate_confidence(
+                extracted_content, structured_info
+            )
 
             # Create result
             result = StructuredData(
@@ -190,7 +214,7 @@ class DataExtractor:
     def _scrape_content(self, url: str) -> Optional[ExtractedContent]:
         """Scrape content from URL with error handling."""
         try:
-            with WebScraper() as scraper:
+            with WebScraper(self.config) as scraper:
                 content = scraper.scrape(url)
 
                 if content and len(content.main_content.strip()) < 50:
@@ -220,7 +244,7 @@ class DataExtractor:
             else:
                 # Use default extraction
                 return self.llm_client.generate_structured_data(
-                    content=llm_content, custom_prompt=self.config.custom_prompt
+                    content=llm_content, custom_prompt=self.config.llm.custom_prompt
                 )
 
         except LLMError:
@@ -249,65 +273,6 @@ class DataExtractor:
 
         return "\n\n".join(parts)
 
-    def _calculate_confidence(
-        self, content: ExtractedContent, structured_info: Dict[str, any]
-    ) -> float:
-        """Calculate extraction confidence score."""
-        score = 0.0
-
-        # Base score for successful extraction
-        score += 0.2
-
-        # Content quality factors
-        if content.title:
-            score += 0.1
-
-        if content.description:
-            score += 0.05
-
-        content_length = len(content.main_content)
-        if content_length > 500:
-            score += 0.15
-        elif content_length > 200:
-            score += 0.1
-        elif content_length > 100:
-            score += 0.05
-
-        # Structured data quality
-        if not structured_info.get("error") and not structured_info.get("extraction_error"):
-            score += 0.2
-
-            # Check for key fields
-            if structured_info.get("summary") and len(structured_info["summary"]) > 20:
-                score += 0.1
-
-            if structured_info.get("topics") and len(structured_info["topics"]) > 0:
-                score += 0.05
-
-            if structured_info.get("entities"):
-                entities = structured_info["entities"]
-                if isinstance(entities, dict):
-                    total_entities = sum(
-                        len(v) if isinstance(v, list) else 0 for v in entities.values()
-                    )
-                    if total_entities > 0:
-                        score += 0.05
-
-            # Bonus for rich extraction
-            field_count = len(
-                [
-                    k
-                    for k, v in structured_info.items()
-                    if v and k not in ["error", "extraction_error"]
-                ]
-            )
-            if field_count >= 6:
-                score += 0.1
-            elif field_count >= 4:
-                score += 0.05
-
-        return min(score, 1.0)
-
     def _create_error_result(self, url: str, error_message: str) -> StructuredData:
         """Create an error result for failed extractions."""
         return StructuredData(
@@ -332,7 +297,7 @@ class DataExtractor:
         """Test connection to LLM service."""
         try:
             if not self.llm_client.is_model_available():
-                model_name = getattr(self.config, "model_name", self.web_config.llm.model_name)
+                model_name = self.config.llm.model_name
                 logger.error(f"Model {model_name} is not available")
                 print(f"❌ Model '{model_name}' is not available")
 
@@ -353,7 +318,7 @@ class DataExtractor:
 
                 return False
 
-            model_name = getattr(self.config, "model_name", self.web_config.llm.model_name)
+            model_name = self.config.llm.model_name
             print(f"✅ Model '{model_name}' is available")
 
             # Test with a simple extraction

@@ -1,8 +1,9 @@
-"""Web scraping functionality using Playwright with improved content detection."""
+"""Improved web scraper with simplified extraction and robust resource management."""
 
 import logging
 import re
 import time
+from contextlib import contextmanager
 from typing import Dict, List, Optional
 from urllib.parse import urljoin, urlparse
 
@@ -10,597 +11,568 @@ from bs4 import BeautifulSoup, NavigableString, Tag
 from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 from playwright.sync_api import sync_playwright
 
-from ..config.settings import settings
+from ..config import get_default_config, get_http_headers
+from .exceptions import (
+    ContentTooLargeError,
+    ErrorHandler,
+    ExtractionError,
+    InvalidURLError,
+    ScrapingError,
+)
 from .models import ExtractedContent
 
 logger = logging.getLogger(__name__)
 
 
-class WebScraper:
-    """Modern web scraper with intelligent content detection."""
+class ContentExtractor:
+    """Simplified content extractor with two reliable strategies."""
 
-    def __init__(self):
-        self.last_request_time = 0
-        self._playwright = None
-        self._browser = None
-        self._context = None
+    def __init__(self, config=None):
+        self.config = config or get_default_config()
 
-    def __enter__(self):
-        self._setup_browser()
-        return self
+    def extract_content(self, soup: BeautifulSoup, url: str) -> ExtractedContent:
+        """Extract content using simplified, reliable strategies."""
+        # Strategy 1: Smart semantic extraction (80% of cases)
+        main_content = self._extract_semantic_content(soup)
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self._cleanup_browser()
+        # Strategy 2: Intelligent fallback for complex pages (20% of cases)
+        if len(main_content) < 100:
+            main_content = self._extract_content_blocks(soup)
 
-    def _setup_browser(self):
-        """Setup Playwright browser with optimized settings."""
-        if not self._playwright:
-            self._playwright = sync_playwright().start()
-            self._browser = self._playwright.chromium.launch(
-                headless=True,
-                args=[
-                    "--no-sandbox",
-                    "--disable-setuid-sandbox",
-                    "--disable-dev-shm-usage",
-                    "--disable-gpu",
-                    "--disable-web-security",
-                    "--disable-features=IsolateOrigins",
-                    "--disable-site-isolation-trials",
-                    "--no-first-run",
-                    "--no-default-browser-check",
-                    "--disable-blink-features=AutomationControlled",
-                ],
-            )
+        # Extract other metadata
+        title = self._extract_title(soup)
+        description = self._extract_description(soup)
+        links = self._extract_links(soup, url)
+        metadata = self._extract_metadata(soup)
 
-            # Create context with stealth settings
-            self._context = self._browser.new_context(
-                viewport={"width": 1920, "height": 1080},
-                user_agent=settings.USER_AGENTS[0],
-                java_script_enabled=True,
-                accept_downloads=False,
-                ignore_https_errors=True,
-                locale="en-US",
-            )
+        return ExtractedContent(
+            url=url,
+            title=title,
+            description=description,
+            main_content=main_content,
+            links=links,
+            metadata=metadata,
+        )
 
-            # Add stealth JavaScript
-            self._context.add_init_script(
-                """
-                // Override navigator properties
-                Object.defineProperty(navigator, 'webdriver', {
-                    get: () => undefined
-                });
+    def _extract_semantic_content(self, soup: BeautifulSoup) -> str:
+        """Strategy 1: Extract content using semantic HTML and content indicators."""
+        candidates = []
 
-                // Add chrome object
-                window.chrome = { runtime: {} };
+        # 1. Semantic HTML5 elements (highest priority)
+        for tag in ["main", "article"]:
+            elements = soup.find_all(tag)
+            for element in elements:
+                content = self._clean_text_from_element(element)
+                if len(content) > 50:
+                    candidates.append((len(content), content))
 
-                // Fix permissions
-                const originalQuery = window.navigator.permissions.query;
-                window.navigator.permissions.query = (parameters) => (
-                    parameters.name === 'notifications' ?
-                        Promise.resolve({ state: Notification.permission }) :
-                        originalQuery(parameters)
-                );
-            """
-            )
-
-    def _cleanup_browser(self):
-        """Cleanup browser resources."""
-        for obj in [self._context, self._browser, self._playwright]:
-            if obj:
-                try:
-                    obj.close() if hasattr(obj, "close") else obj.stop()
-                except Exception:
-                    pass
-
-        self._context = self._browser = self._playwright = None
-
-    def _apply_rate_limit(self):
-        """Apply rate limiting between requests."""
-        elapsed = time.time() - self.last_request_time
-        if elapsed < settings.REQUEST_DELAY:
-            time.sleep(settings.REQUEST_DELAY - elapsed)
-        self.last_request_time = time.time()
-
-    def scrape(self, url: str) -> Optional[ExtractedContent]:
-        """Main scraping method with intelligent extraction."""
-        logger.info(f"Starting scrape of: {url}")
-
-        try:
-            # Fetch the page
-            html = self._fetch_page_content(url)
-            if not html:
-                return None
-
-            # Parse and extract
-            soup = BeautifulSoup(html, "lxml")
-
-            # Clean the HTML
-            self._remove_unwanted_elements(soup)
-
-            # Extract components
-            title = self._extract_title(soup)
-            description = self._extract_description(soup)
-            main_content = self._extract_main_content(soup)
-
-            if not main_content or len(main_content.strip()) < 50:
-                logger.warning(f"Insufficient content extracted from {url}")
-                # Try alternative extraction
-                main_content = self._fallback_content_extraction(soup)
-
-            links = self._extract_important_links(soup, url)
-            metadata = self._extract_metadata(soup)
-
-            return ExtractedContent(
-                title=title,
-                description=description,
-                main_content=main_content,
-                links=links,
-                metadata=metadata,
-            )
-
-        except Exception as e:
-            logger.error(f"Scraping failed for {url}: {e}")
-            return None
-
-    def _fetch_page_content(self, url: str) -> Optional[str]:
-        """Fetch page content with retries and error handling."""
-        self._apply_rate_limit()
-
-        if not self._browser:
-            self._setup_browser()
-
-        page = None
-        for attempt in range(settings.RETRY_ATTEMPTS):
-            try:
-                page = self._context.new_page()
-
-                # Configure page
-                page.set_extra_http_headers(
-                    {
-                        "Accept-Language": "en-US,en;q=0.9",
-                        "Accept-Encoding": "gzip, deflate, br",
-                        "Cache-Control": "no-cache",
-                        "Pragma": "no-cache",
-                    }
-                )
-
-                # Navigate with appropriate timeout
-                timeout = settings.REQUEST_TIMEOUT * 1000
-                response = page.goto(url, wait_until="domcontentloaded", timeout=timeout)
-
-                if not response:
-                    logger.warning(f"No response from {url}")
-                    continue
-
-                # Check status
-                if response.status >= 400:
-                    logger.warning(f"HTTP {response.status} for {url}")
-                    if response.status == 429:  # Rate limited
-                        time.sleep(settings.RETRY_DELAY * (attempt + 1))
-                        continue
-                    elif response.status >= 500:  # Server error
-                        if attempt < settings.RETRY_ATTEMPTS - 1:
-                            time.sleep(settings.RETRY_DELAY)
-                            continue
-                    else:  # Client error
-                        return None
-
-                # Wait for content to load
-                try:
-                    # Wait for body to have content
-                    page.wait_for_function(
-                        "document.body && document.body.innerText.length > 100",
-                        timeout=5000,
-                    )
-                except Exception:
-                    # Fallback wait
-                    page.wait_for_timeout(2000)
-
-                # Get content
-                content = page.content()
-
-                if len(content) > 100:
-                    logger.info(f"Successfully fetched {len(content)} bytes from {url}")
-                    return content
-
-            except PlaywrightTimeoutError:
-                logger.warning(f"Timeout on attempt {attempt + 1} for {url}")
-                if attempt < settings.RETRY_ATTEMPTS - 1:
-                    time.sleep(settings.RETRY_DELAY)
-
-            except Exception as e:
-                logger.error(f"Error fetching {url}: {e}")
-                if attempt < settings.RETRY_ATTEMPTS - 1:
-                    time.sleep(settings.RETRY_DELAY)
-
-            finally:
-                if page:
-                    try:
-                        page.close()
-                    except Exception:
-                        pass
-
-        return None
-
-    def _remove_unwanted_elements(self, soup: BeautifulSoup):
-        """Remove unwanted elements from the page."""
-        # Remove script and style elements
-        for element in soup.find_all(["script", "style", "noscript"]):
-            element.decompose()
-
-        # Remove common non-content elements
-        unwanted_selectors = [
-            "nav",
-            "header",
-            "footer",
-            "aside",
-            ".nav",
-            ".navigation",
-            ".header",
-            ".footer",
-            ".menu",
-            ".sidebar",
-            ".advertisement",
-            ".ads",
-            ".popup",
-            ".modal",
-            ".cookie-notice",
-            ".banner",
-            "#nav",
-            "#navigation",
-            "#header",
-            "#footer",
-            "#menu",
-            "#sidebar",
-            "#advertisement",
-            "#ads",
-            '[role="navigation"]',
-            '[role="banner"]',
-            '[aria-label="advertisement"]',
+        # 2. Content-indicating classes and IDs
+        content_patterns = [
+            r"content",
+            r"main-content",
+            r"article-content",
+            r"post-content",
+            r"entry-content",
+            r"story",
+            r"body-content",
         ]
 
-        for selector in unwanted_selectors:
-            for element in soup.select(selector):
-                element.decompose()
+        for pattern in content_patterns:
+            # Check classes
+            elements = soup.find_all(class_=re.compile(pattern, re.I))
+            # Check IDs
+            elements.extend(soup.find_all(id=re.compile(pattern, re.I)))
 
-    def _extract_title(self, soup: BeautifulSoup) -> Optional[str]:
-        """Extract page title using multiple strategies."""
-        # Try standard title tag
+            for element in elements:
+                content = self._clean_text_from_element(element)
+                if len(content) > 50:
+                    candidates.append((len(content), content))
+
+        # Return the longest valid content
+        if candidates:
+            candidates.sort(key=lambda x: x[0], reverse=True)
+            return candidates[0][1]
+
+        return ""
+
+    def _extract_content_blocks(self, soup: BeautifulSoup) -> str:
+        """Strategy 2: Extract content by analyzing text density in blocks."""
+        # Find all container elements
+        containers = soup.find_all(["div", "section", "article", "main"])
+
+        scored_containers = []
+        for container in containers:
+            score = self._score_content_container(container)
+            if score > 0:
+                scored_containers.append((score, container))
+
+        if scored_containers:
+            # Get the highest scoring container
+            scored_containers.sort(key=lambda x: x[0], reverse=True)
+            best_container = scored_containers[0][1]
+            return self._clean_text_from_element(best_container)
+
+        # Last resort: extract from body with heavy filtering
+        body = soup.find("body") or soup
+        return self._extract_body_text(body)
+
+    def _score_content_container(self, container: Tag) -> float:
+        """Score a container based on content quality indicators."""
+        if not container:
+            return 0
+
+        score = 0
+        text = container.get_text(strip=True)
+
+        # Base score: text length
+        score += len(text) * 0.1
+
+        # Bonus for paragraphs
+        paragraphs = container.find_all("p")
+        score += len(paragraphs) * 10
+
+        # Bonus for headings
+        headings = container.find_all(["h1", "h2", "h3", "h4", "h5", "h6"])
+        score += len(headings) * 5
+
+        # Penalty for navigation/unwanted elements
+        unwanted = container.find_all(["nav", "aside", "footer", "header"])
+        score -= len(unwanted) * 20
+
+        # Penalty for too many links (likely navigation)
+        links = container.find_all("a")
+        link_ratio = len(links) / max(len(text.split()), 1)
+        if link_ratio > 0.1:  # More than 10% links
+            score *= 0.5
+
+        return max(0, score)
+
+    def _clean_text_from_element(self, element: Tag) -> str:
+        """Extract and clean text from an element."""
+        if not element:
+            return ""
+
+        # Clone element to avoid modifying original
+        element_copy = element.__copy__()
+
+        # Remove unwanted elements
+        unwanted_tags = [
+            "script",
+            "style",
+            "noscript",
+            "iframe",
+            "embed",
+            "object",
+            "nav",
+            "aside",
+            "footer",
+            "header",
+            "advertisement",
+            "ads",
+        ]
+
+        for tag in unwanted_tags:
+            for elem in element_copy.find_all(tag):
+                elem.decompose()
+
+        # Remove elements with unwanted classes
+        unwanted_classes = [
+            "advertisement",
+            "ads",
+            "sidebar",
+            "navigation",
+            "nav",
+            "footer",
+            "header",
+            "menu",
+            "social",
+            "share",
+            "comment",
+        ]
+
+        for class_name in unwanted_classes:
+            for elem in element_copy.find_all(class_=re.compile(class_name, re.I)):
+                elem.decompose()
+
+        # Extract text with proper spacing
+        text = element_copy.get_text(separator=" ", strip=True)
+
+        # Clean up whitespace
+        text = re.sub(r"\s+", " ", text).strip()
+
+        # Check content length limits
+        if len(text) > self.config.scraping.max_content_length:
+            raise ContentTooLargeError(
+                "Content exceeds maximum length limit",
+                content_size=len(text),
+                size_limit=self.config.scraping.max_content_length,
+            )
+
+        return text
+
+    def _extract_body_text(self, body: Tag) -> str:
+        """Extract text from body with aggressive filtering."""
+        # Remove unwanted elements
+        unwanted_tags = [
+            "script",
+            "style",
+            "noscript",
+            "iframe",
+            "embed",
+            "object",
+            "nav",
+            "aside",
+            "footer",
+            "header",
+            "form",
+        ]
+
+        body_copy = body.__copy__()
+        for tag in unwanted_tags:
+            for elem in body_copy.find_all(tag):
+                elem.decompose()
+
+        # Get text from meaningful elements only
+        meaningful_elements = body_copy.find_all(
+            ["p", "h1", "h2", "h3", "h4", "h5", "h6", "li", "blockquote", "article", "section"]
+        )
+
+        text_parts = []
+        for elem in meaningful_elements:
+            text = elem.get_text(strip=True)
+            if len(text) > 20:  # Only substantial text
+                text_parts.append(text)
+
+        content = " ".join(text_parts)
+
+        # Clean up
+        content = re.sub(r"\s+", " ", content).strip()
+
+        # Check content length limits
+        if len(content) > self.config.scraping.max_content_length:
+            raise ContentTooLargeError(
+                "Content exceeds maximum length limit",
+                content_size=len(content),
+                size_limit=self.config.scraping.max_content_length,
+            )
+
+        return content
+
+    def _extract_title(self, soup: BeautifulSoup) -> str:
+        """Extract page title using reliable methods."""
+        # 1. Open Graph title
+        og_title = soup.find("meta", property="og:title")
+        if og_title and og_title.get("content"):
+            return og_title["content"].strip()
+
+        # 2. HTML title tag
         title_tag = soup.find("title")
         if title_tag and title_tag.string:
             return title_tag.string.strip()
 
-        # Try Open Graph title
-        og_title = soup.find("meta", {"property": "og:title"})
-        if og_title and og_title.get("content"):
-            return og_title["content"].strip()
+        # 3. First h1 tag
+        h1_tag = soup.find("h1")
+        if h1_tag:
+            return h1_tag.get_text(strip=True)
 
-        # Try Twitter title
-        twitter_title = soup.find("meta", {"name": "twitter:title"})
-        if twitter_title and twitter_title.get("content"):
-            return twitter_title["content"].strip()
+        return ""
 
-        # Try H1
-        h1 = soup.find("h1")
-        if h1:
-            return h1.get_text(strip=True)
-
-        return None
-
-    def _extract_description(self, soup: BeautifulSoup) -> Optional[str]:
+    def _extract_description(self, soup: BeautifulSoup) -> str:
         """Extract page description."""
-        # Meta description
-        meta_desc = soup.find("meta", {"name": "description"})
-        if meta_desc and meta_desc.get("content"):
-            return meta_desc["content"].strip()
-
-        # OG description
-        og_desc = soup.find("meta", {"property": "og:description"})
+        # 1. Open Graph description
+        og_desc = soup.find("meta", property="og:description")
         if og_desc and og_desc.get("content"):
             return og_desc["content"].strip()
 
-        # Twitter description
-        twitter_desc = soup.find("meta", {"name": "twitter:description"})
-        if twitter_desc and twitter_desc.get("content"):
-            return twitter_desc["content"].strip()
+        # 2. Meta description
+        meta_desc = soup.find("meta", attrs={"name": "description"})
+        if meta_desc and meta_desc.get("content"):
+            return meta_desc["content"].strip()
 
-        return None
+        return ""
 
-    def _extract_main_content(self, soup: BeautifulSoup) -> str:
-        """Extract main content using multiple strategies."""
-        # Strategy 1: Look for semantic HTML5 elements
-        for tag in ["main", "article"]:
-            elements = soup.find_all(tag)
-            if elements:
-                # Get the largest one
-                largest = max(elements, key=lambda x: len(x.get_text(strip=True)))
-                content = self._extract_text_from_element(largest)
-                if len(content) > 100:
-                    return content
-
-        # Strategy 2: Look for content-indicating classes/IDs
-        content_indicators = [
-            "content",
-            "main-content",
-            "article-content",
-            "post-content",
-            "entry-content",
-            "story-content",
-            "body-content",
-            "text-content",
-            "page-content",
-            "blog-content",
-            "news-content",
-        ]
-
-        for indicator in content_indicators:
-            # Try class
-            elements = soup.find_all(class_=re.compile(indicator, re.I))
-            if not elements:
-                # Try ID
-                element = soup.find(id=re.compile(indicator, re.I))
-                if element:
-                    elements = [element]
-
-            if elements:
-                largest = max(elements, key=lambda x: len(x.get_text(strip=True)))
-                content = self._extract_text_from_element(largest)
-                if len(content) > 100:
-                    return content
-
-        # Strategy 3: Find the element with the most paragraph tags
-        all_containers = soup.find_all(["div", "section", "article"])
-        if all_containers:
-
-            def paragraph_score(element):
-                paragraphs = element.find_all("p")
-                return sum(len(p.get_text(strip=True)) for p in paragraphs)
-
-            best_container = max(all_containers, key=paragraph_score)
-            content = self._extract_text_from_element(best_container)
-            if len(content) > 100:
-                return content
-
-        # Strategy 4: Fallback to body
-        return self._fallback_content_extraction(soup)
-
-    def _extract_text_from_element(self, element: Tag) -> str:
-        """Extract clean text from an element."""
-        if not element:
-            return ""
-
-        # Clone the element to avoid modifying the original
-        element_copy = element
-
-        # Remove any remaining unwanted elements within
-        for tag in ["script", "style", "nav", "aside"]:
-            for unwanted in element_copy.find_all(tag):
-                unwanted.decompose()
-
-        # Extract text with proper spacing
-        text_parts = []
-        for elem in element_copy.descendants:
-            if isinstance(elem, NavigableString):
-                text = elem.strip()
-                if text:
-                    text_parts.append(text)
-            elif elem.name in [
-                "p",
-                "div",
-                "section",
-                "h1",
-                "h2",
-                "h3",
-                "h4",
-                "h5",
-                "h6",
-                "li",
-                "br",
-            ]:
-                text_parts.append("\n")
-
-        # Join and clean
-        text = " ".join(text_parts)
-        text = re.sub(r"\n\s*\n+", "\n\n", text)  # Multiple newlines to double
-        text = re.sub(r" +", " ", text)  # Multiple spaces to single
-        text = text.strip()
-
-        # Limit length
-        if len(text) > settings.MAX_CONTENT_LENGTH:
-            text = text[: settings.MAX_CONTENT_LENGTH] + "..."
-
-        return text
-
-    def _fallback_content_extraction(self, soup: BeautifulSoup) -> str:
-        """Fallback content extraction when specific strategies fail."""
-        # Get all text from body
-        body = soup.find("body") or soup
-
-        # Remove any remaining unwanted elements
-        for tag in ["script", "style", "nav", "header", "footer"]:
-            for elem in body.find_all(tag):
-                elem.decompose()
-
-        # Get all paragraphs and significant text elements
-        text_elements = body.find_all(
-            ["p", "h1", "h2", "h3", "h4", "h5", "h6", "li", "td", "blockquote"]
-        )
-
-        text_parts = []
-        for elem in text_elements:
-            text = elem.get_text(strip=True)
-            if len(text) > 20:  # Only include substantial text
-                text_parts.append(text)
-
-        content = "\n".join(text_parts)
-
-        # If still too short, get all text
-        if len(content) < 100:
-            content = body.get_text(separator=" ", strip=True)
-
-        # Clean and limit
-        content = re.sub(r"\s+", " ", content).strip()
-        if len(content) > settings.MAX_CONTENT_LENGTH:
-            content = content[: settings.MAX_CONTENT_LENGTH] + "..."
-
-        return content
-
-    def _extract_important_links(self, soup: BeautifulSoup, base_url: str) -> List[str]:
-        """Extract important links from the page."""
+    def _extract_links(self, soup: BeautifulSoup, base_url: str) -> List[str]:
+        """Extract important links."""
         links = []
-        seen_urls = set()
-
-        # Find all links
         for link in soup.find_all("a", href=True):
-            href = link.get("href", "").strip()
-            if not href:
+            href = link["href"].strip()
+            if href.startswith("#") or href.startswith("javascript:"):
                 continue
 
-            # Make absolute
-            absolute_url = urljoin(base_url, href)
+            full_url = urljoin(base_url, href)
+            if full_url not in links:
+                links.append(full_url)
 
-            # Skip if already seen
-            if absolute_url in seen_urls:
-                continue
-
-            # Validate link
-            if self._is_important_link(absolute_url, link):
-                links.append(absolute_url)
-                seen_urls.add(absolute_url)
-
-                if len(links) >= 20:  # Limit number of links
-                    break
+            if len(links) >= 10:  # Limit number of links
+                break
 
         return links
 
-    def _is_important_link(self, url: str, link_element: Tag) -> bool:
-        """Determine if a link is important enough to include."""
-        # Skip non-HTTP URLs
-        parsed = urlparse(url)
-        if parsed.scheme not in ["http", "https"]:
-            return False
-
-        # Skip media files and documents
-        skip_extensions = {
-            ".jpg",
-            ".jpeg",
-            ".png",
-            ".gif",
-            ".bmp",
-            ".svg",
-            ".webp",
-            ".mp3",
-            ".mp4",
-            ".avi",
-            ".mov",
-            ".wmv",
-            ".flv",
-            ".pdf",
-            ".doc",
-            ".docx",
-            ".xls",
-            ".xlsx",
-            ".ppt",
-            ".pptx",
-            ".zip",
-            ".rar",
-            ".tar",
-            ".gz",
-            ".exe",
-            ".dmg",
-        }
-
-        url_lower = url.lower()
-        for ext in skip_extensions:
-            if url_lower.endswith(ext):
-                return False
-
-        # Skip common utility links
-        skip_patterns = [
-            "/login",
-            "/signin",
-            "/signup",
-            "/register",
-            "/logout",
-            "/signout",
-            "/password",
-            "/forgot",
-            "/terms",
-            "/privacy",
-            "/cookie",
-            "/legal",
-            "javascript:",
-            "mailto:",
-            "tel:",
-            "#",
-        ]
-
-        for pattern in skip_patterns:
-            if pattern in url_lower:
-                return False
-
-        # Prefer links with meaningful text
-        link_text = link_element.get_text(strip=True)
-        if link_text and len(link_text) > 3:
-            return True
-
-        # Check for important rel attributes
-        rel = link_element.get("rel", [])
-        if isinstance(rel, str):
-            rel = [rel]
-
-        important_rels = {"author", "canonical", "next", "prev"}
-        if any(r in important_rels for r in rel):
-            return True
-
-        return False
-
-    def _extract_metadata(self, soup: BeautifulSoup) -> Dict[str, str]:
-        """Extract comprehensive metadata."""
+    def _extract_metadata(self, soup: BeautifulSoup) -> Dict:
+        """Extract basic metadata."""
         metadata = {}
 
-        # Standard meta tags
-        meta_mappings = {
-            "author": "author",
-            "keywords": "keywords",
-            "viewport": "viewport",
-            "robots": "robots",
-            "generator": "generator",
-            "published_time": "published_time",
-            "modified_time": "modified_time",
-        }
+        # Language
+        html_tag = soup.find("html")
+        if html_tag and html_tag.get("lang"):
+            metadata["language"] = html_tag["lang"]
 
-        for name, key in meta_mappings.items():
-            meta = soup.find("meta", {"name": name})
-            if meta and meta.get("content"):
-                metadata[key] = meta["content"]
-
-        # Open Graph tags
-        for og_tag in soup.find_all("meta", {"property": re.compile(r"^og:")}):
-            if og_tag.get("content"):
-                prop_name = og_tag["property"].replace("og:", "og_")
-                metadata[prop_name] = og_tag["content"]
-
-        # Twitter Card tags
-        for twitter_tag in soup.find_all("meta", {"name": re.compile(r"^twitter:")}):
-            if twitter_tag.get("content"):
-                name = twitter_tag["name"].replace("twitter:", "twitter_")
-                metadata[name] = twitter_tag["content"]
-
-        # Schema.org JSON-LD
-        json_ld = soup.find("script", {"type": "application/ld+json"})
-        if json_ld and json_ld.string:
-            try:
-                import json
-
-                schema_data = json.loads(json_ld.string)
-                metadata["schema_org"] = schema_data
-            except Exception:
-                pass
-
-        # Canonical URL
-        canonical = soup.find("link", {"rel": "canonical"})
-        if canonical and canonical.get("href"):
-            metadata["canonical_url"] = canonical["href"]
+        # Viewport
+        viewport = soup.find("meta", attrs={"name": "viewport"})
+        if viewport and viewport.get("content"):
+            metadata["viewport"] = viewport["content"]
 
         return metadata
+
+
+class ResourceManager:
+    """Robust resource management for Playwright."""
+
+    def __init__(self, config=None):
+        self.config = config or get_default_config()
+        self.playwright = None
+        self.browser = None
+        self.context = None
+
+    @contextmanager
+    def browser_session(self):
+        """Context manager for browser session with guaranteed cleanup."""
+        try:
+            self._setup_browser()
+            yield self
+        finally:
+            self._cleanup_browser()
+
+    def _setup_browser(self):
+        """Setup browser with proper error handling."""
+        try:
+            if not self.playwright:
+                self.playwright = sync_playwright().start()
+                logger.debug("Playwright started")
+
+            if not self.browser:
+                self.browser = self.playwright.chromium.launch(
+                    headless=True,
+                    args=[
+                        "--no-sandbox",
+                        "--disable-setuid-sandbox",
+                        "--disable-dev-shm-usage",
+                        "--disable-accelerated-2d-canvas",
+                        "--no-first-run",
+                        "--no-zygote",
+                        "--disable-gpu",
+                        "--hide-scrollbars",
+                        "--mute-audio",
+                    ],
+                )
+                logger.debug("Browser launched")
+
+            if not self.context:
+                self.context = self.browser.new_context(
+                    user_agent=self.config.scraping.user_agents[0],
+                    viewport={"width": 1920, "height": 1080},
+                )
+                logger.debug("Browser context created")
+
+        except Exception as e:
+            logger.error(f"Failed to setup browser: {e}")
+            self._cleanup_browser()  # Cleanup partial state
+            raise ScrapingError(
+                "Failed to initialize browser",
+                original_error=e,
+                suggestions=[
+                    "Check if Playwright is properly installed",
+                    "Ensure sufficient system resources are available",
+                    "Try restarting the browser service",
+                ],
+            )
+
+    def _cleanup_browser(self):
+        """Cleanup browser resources with specific error handling."""
+        errors = []
+
+        # Cleanup context
+        if self.context:
+            try:
+                self.context.close()
+                logger.debug("Browser context closed")
+            except Exception as e:
+                errors.append(f"Context cleanup failed: {e}")
+            finally:
+                self.context = None
+
+        # Cleanup browser
+        if self.browser:
+            try:
+                self.browser.close()
+                logger.debug("Browser closed")
+            except Exception as e:
+                errors.append(f"Browser cleanup failed: {e}")
+            finally:
+                self.browser = None
+
+        # Cleanup playwright
+        if self.playwright:
+            try:
+                self.playwright.stop()
+                logger.debug("Playwright stopped")
+            except Exception as e:
+                errors.append(f"Playwright cleanup failed: {e}")
+            finally:
+                self.playwright = None
+
+        # Log any cleanup errors but don't raise
+        if errors:
+            logger.warning(f"Cleanup errors: {'; '.join(errors)}")
+
+    def fetch_page(self, url: str) -> Optional[str]:
+        """Fetch page HTML with proper error handling."""
+        if not self.context:
+            raise ScrapingError(
+                "Browser not initialized",
+                error_code="BROWSER_NOT_INITIALIZED",
+                suggestions=[
+                    "Use browser_session() context manager",
+                    "Ensure proper browser setup before scraping",
+                ],
+            )
+
+        page = None
+        try:
+            page = self.context.new_page()
+
+            # Apply rate limiting
+            self._apply_rate_limit()
+
+            # Navigate with timeout
+            timeout_ms = self.config.scraping.request_timeout * 1000
+            page.goto(url, timeout=timeout_ms, wait_until="domcontentloaded")
+
+            # Get HTML content
+            html = page.content()
+            logger.info(f"Successfully fetched {len(html)} characters from {url}")
+
+            return html
+
+        except PlaywrightTimeoutError as e:
+            raise ScrapingError(
+                f"Timeout while fetching page",
+                url=url,
+                timeout_duration=self.config.scraping.request_timeout,
+                original_error=e,
+            )
+        except Exception as e:
+            raise ErrorHandler.handle_with_context(
+                "fetch_page",
+                {"url": url},
+                e,
+                ["Check network connectivity", "Verify URL accessibility"],
+            )
+        finally:
+            if page:
+                try:
+                    page.close()
+                except Exception as e:
+                    logger.warning(f"Error closing page: {e}")
+
+    def _apply_rate_limit(self):
+        """Apply rate limiting between requests."""
+        if not hasattr(self, "_last_request_time"):
+            self._last_request_time = 0
+
+        elapsed = time.time() - self._last_request_time
+        if elapsed < self.config.scraping.request_delay:
+            time.sleep(self.config.scraping.request_delay - elapsed)
+        self._last_request_time = time.time()
+
+
+class ImprovedWebScraper:
+    """Improved web scraper with simplified extraction and robust resource management."""
+
+    def __init__(self, config=None):
+        self.config = config or get_default_config()
+        self.extractor = ContentExtractor(config)
+        self.resource_manager = ResourceManager(config)
+
+    def scrape(self, url: str) -> Optional[ExtractedContent]:
+        """Main scraping method with simplified, reliable extraction."""
+        logger.info(f"Starting scrape of: {url}")
+
+        try:
+            with self.resource_manager.browser_session():
+                # Fetch page content
+                html = self.resource_manager.fetch_page(url)
+                if not html:
+                    logger.warning(f"Failed to fetch content from {url}")
+                    return None
+
+                # Parse HTML
+                soup = BeautifulSoup(html, "lxml")
+
+                # Extract content using simplified strategies
+                content = self.extractor.extract_content(soup, url)
+
+                # Validate content
+                if not content.main_content or len(content.main_content.strip()) < 50:
+                    raise ExtractionError(
+                        "Insufficient content extracted from page",
+                        url=url,
+                        extraction_stage="content_validation",
+                        context={
+                            "content_length": (
+                                len(content.main_content) if content.main_content else 0
+                            )
+                        },
+                    )
+
+                logger.info(
+                    f"Successfully extracted {len(content.main_content)} characters from {url}"
+                )
+                return content
+
+        except (ScrapingError, ExtractionError, InvalidURLError):
+            # Re-raise WebExtract errors as-is
+            raise
+        except Exception as e:
+            # Convert unexpected errors to ScrapingError
+            raise ErrorHandler.handle_with_context(
+                "scrape",
+                {"url": url},
+                e,
+                ["Check URL accessibility", "Verify network connectivity"],
+            )
+
+    def scrape_multiple(self, urls: List[str]) -> List[ExtractedContent]:
+        """Scrape multiple URLs efficiently with shared browser session."""
+        results = []
+
+        try:
+            with self.resource_manager.browser_session():
+                for url in urls:
+                    try:
+                        html = self.resource_manager.fetch_page(url)
+                        if html:
+                            soup = BeautifulSoup(html, "lxml")
+                            content = self.extractor.extract_content(soup, url)
+                            if content and len(content.main_content.strip()) >= 50:
+                                results.append(content)
+                    except Exception as e:
+                        logger.error(f"Failed to scrape {url}: {e}")
+                        continue
+
+        except Exception as e:
+            logger.error(f"Batch scraping failed: {e}")
+
+        return results
+
+
+# Backward compatibility - replace the old WebScraper class
+class WebScraper(ImprovedWebScraper):
+    """Backward compatible WebScraper using improved implementation."""
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        # Resource cleanup is handled automatically by context managers
+        pass

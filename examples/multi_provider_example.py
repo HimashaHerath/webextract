@@ -12,6 +12,13 @@ Requirements:
 """
 
 import os
+import sys
+from pathlib import Path
+
+# Add the tests directory to the path for test data access
+sys.path.insert(0, str(Path(__file__).parent.parent / "tests"))
+
+from example_test_data import TestDataCategories
 
 from webextract import (  # Exception types for proper error handling
     AuthenticationError,
@@ -209,9 +216,11 @@ def main():
     print("🚀 WebExtract - Multi-Provider Example")
     print("=" * 50)
 
-    # Test URL
-    url = "https://techcrunch.com/2024/01/15/ai-industry-trends/"
+    # Use reliable test URL instead of hardcoded URL that may break
+    test_urls = TestDataCategories.get_content_types()
+    url = test_urls["news"]
     print(f"\n🎯 Target URL: {url}")
+    print("   (Using reliable test URL from test data server)")
 
     # Check provider availability
     providers = demo_provider_availability()
@@ -251,6 +260,7 @@ def main():
     print("   2. Use fallback strategies for reliability")
     print("   3. Monitor confidence scores for quality")
     print("   4. Handle specific exception types for better UX")
+    print("   5. Use reliable test URLs to avoid broken hardcoded URLs")
 
 
 if __name__ == "__main__":

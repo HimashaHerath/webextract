@@ -1,67 +1,40 @@
-"""LLM WebExtract - AI-powered web content extraction using LLMs."""
+"""LLM WebExtract - AI-powered web content extraction using LLMs.
 
-__version__ = "1.2.4"
+This module provides clean, direct imports with excellent IDE support,
+immediate error feedback, and proper type hints.
+"""
+
+try:
+    from importlib.metadata import version
+except ImportError:
+    from importlib_metadata import version
+
+__version__ = version("llm-webextract")
 __author__ = "Himasha Herath"
 __description__ = "AI-powered web content extraction with Large Language Models"
 
-# Lazy imports - only import when needed to allow version checking
-import sys
-
-_imports_loaded = False
-
-
-def _load_imports():
-    """Load all imports when needed."""
-    global _imports_loaded
-    if _imports_loaded:
-        return
-
-    from .config.profiles import ConfigProfiles
-    from .config.settings import ConfigBuilder, LLMConfig, ScrapingConfig, WebExtractConfig
-    from .core.exceptions import (
-        AuthenticationError,
-        ConfigurationError,
-        ExtractionError,
-        LLMError,
-        ScrapingError,
-        WebExtractError,
-    )
-    from .core.extractor import DataExtractor as WebExtractor
-    from .core.models import ExtractedContent, ExtractionConfig, StructuredData
-
-    # Add to module globals
-    current_module = sys.modules[__name__]
-    setattr(current_module, "ConfigProfiles", ConfigProfiles)
-    setattr(current_module, "ConfigBuilder", ConfigBuilder)
-    setattr(current_module, "LLMConfig", LLMConfig)
-    setattr(current_module, "ScrapingConfig", ScrapingConfig)
-    setattr(current_module, "WebExtractConfig", WebExtractConfig)
-    setattr(current_module, "AuthenticationError", AuthenticationError)
-    setattr(current_module, "ConfigurationError", ConfigurationError)
-    setattr(current_module, "ExtractionError", ExtractionError)
-    setattr(current_module, "LLMError", LLMError)
-    setattr(current_module, "ScrapingError", ScrapingError)
-    setattr(current_module, "WebExtractError", WebExtractError)
-    setattr(current_module, "WebExtractor", WebExtractor)
-    setattr(current_module, "ExtractedContent", ExtractedContent)
-    setattr(current_module, "ExtractionConfig", ExtractionConfig)
-    setattr(current_module, "StructuredData", StructuredData)
-
-    _imports_loaded = True
-
-
-def __getattr__(name):
-    """Load imports on first access."""
-    _load_imports()
-    return getattr(sys.modules[__name__], name)
-
+# Direct imports for better IDE support and immediate error feedback
+from .config.profiles import ConfigProfiles
+from .config.settings import ConfigBuilder, LLMConfig, ScrapingConfig, WebExtractConfig
+from .core.exceptions import (
+    AuthenticationError,
+    ConfigurationError,
+    ExtractionError,
+    LLMError,
+    ScrapingError,
+    WebExtractError,
+)
+from .core.extractor import DataExtractor as WebExtractor
+from .core.models import ExtractedContent, ExtractionConfig, StructuredData
 
 # Public API
 __all__ = [
+    # Core classes
     "WebExtractor",
     "StructuredData",
     "ExtractedContent",
     "ExtractionConfig",
+    # Configuration
     "WebExtractConfig",
     "ConfigBuilder",
     "ScrapingConfig",
@@ -82,26 +55,30 @@ __all__ = [
 ]
 
 
-# Convenience functions for quick usage
-def quick_extract(url: str, model: str = "llama3.2", **kwargs):
+def quick_extract(url: str, model: str = "llama3.2", **kwargs) -> StructuredData:
     """Quick extraction with minimal configuration.
 
     Args:
         url: URL to extract from
-        model: LLM model name to use
+        model: LLM model name to use (default: llama3.2)
         **kwargs: Additional configuration options
 
     Returns:
         StructuredData: Extracted and processed data
-    """
-    _load_imports()
-    current_module = sys.modules[__name__]
-    ConfigBuilder = getattr(current_module, "ConfigBuilder")  # noqa: F821
-    WebExtractor = getattr(current_module, "WebExtractor")  # noqa: F821
 
+    Raises:
+        ExtractionError: If extraction fails
+        ConfigurationError: If configuration is invalid
+        LLMError: If LLM service is unavailable
+
+    Example:
+        >>> result = quick_extract("https://example.com")
+        >>> print(result.content.title)
+    """
     config = ConfigBuilder().with_model(model).build()
+
+    # Apply additional configuration options
     if kwargs:
-        # Apply any additional config options
         for key, value in kwargs.items():
             if hasattr(config.llm, key):
                 setattr(config.llm, key, value)
@@ -112,47 +89,57 @@ def quick_extract(url: str, model: str = "llama3.2", **kwargs):
     return extractor.extract(url)
 
 
-def extract_with_openai(url: str, api_key: str, model: str = "gpt-4", **kwargs):
+def extract_with_openai(
+    url: str, api_key: str, model: str = "gpt-4o-mini", **kwargs
+) -> StructuredData:
     """Quick extraction using OpenAI models.
 
     Args:
         url: URL to extract from
         api_key: OpenAI API key
-        model: OpenAI model name
+        model: OpenAI model name (default: gpt-4o-mini)
         **kwargs: Additional configuration options
 
     Returns:
         StructuredData: Extracted and processed data
-    """
-    _load_imports()
-    current_module = sys.modules[__name__]
-    ConfigBuilder = getattr(current_module, "ConfigBuilder")  # noqa: F821
-    WebExtractor = getattr(current_module, "WebExtractor")  # noqa: F821
 
+    Raises:
+        AuthenticationError: If API key is invalid
+        ExtractionError: If extraction fails
+        LLMError: If OpenAI service is unavailable
+
+    Example:
+        >>> result = extract_with_openai("https://example.com", "sk-...")
+        >>> print(result.structured_info.get("summary"))
+    """
     config = ConfigBuilder().with_openai(api_key, model).build()
     extractor = WebExtractor(config)
     return extractor.extract(url)
 
 
 def extract_with_anthropic(
-    url: str, api_key: str, model: str = "claude-3-sonnet-20240229", **kwargs
-):
-    """Quick extraction using Anthropic models.
+    url: str, api_key: str, model: str = "claude-3-5-sonnet-20241022", **kwargs
+) -> StructuredData:
+    """Quick extraction using Anthropic Claude models.
 
     Args:
         url: URL to extract from
         api_key: Anthropic API key
-        model: Claude model name
+        model: Claude model name (default: claude-3-5-sonnet-20241022)
         **kwargs: Additional configuration options
 
     Returns:
         StructuredData: Extracted and processed data
-    """
-    _load_imports()
-    current_module = sys.modules[__name__]
-    ConfigBuilder = getattr(current_module, "ConfigBuilder")  # noqa: F821
-    WebExtractor = getattr(current_module, "WebExtractor")  # noqa: F821
 
+    Raises:
+        AuthenticationError: If API key is invalid
+        ExtractionError: If extraction fails
+        LLMError: If Anthropic service is unavailable
+
+    Example:
+        >>> result = extract_with_anthropic("https://example.com", "sk-ant-...")
+        >>> print(result.confidence)
+    """
     config = ConfigBuilder().with_anthropic(api_key, model).build()
     extractor = WebExtractor(config)
     return extractor.extract(url)
@@ -160,23 +147,27 @@ def extract_with_anthropic(
 
 def extract_with_ollama(
     url: str, model: str = "llama3.2", base_url: str = "http://localhost:11434", **kwargs
-):
+) -> StructuredData:
     """Quick extraction using Ollama models.
 
     Args:
         url: URL to extract from
-        model: Ollama model name
-        base_url: Ollama server base URL
+        model: Ollama model name (default: llama3.2)
+        base_url: Ollama server base URL (default: http://localhost:11434)
         **kwargs: Additional configuration options
 
     Returns:
         StructuredData: Extracted and processed data
-    """
-    _load_imports()
-    current_module = sys.modules[__name__]
-    ConfigBuilder = getattr(current_module, "ConfigBuilder")  # noqa: F821
-    WebExtractor = getattr(current_module, "WebExtractor")  # noqa: F821
 
+    Raises:
+        LLMError: If Ollama server is unavailable
+        ExtractionError: If extraction fails
+        ConfigurationError: If model is not available
+
+    Example:
+        >>> result = extract_with_ollama("https://example.com", "llama3.2")
+        >>> print(result.content.main_content[:100])
+    """
     config = ConfigBuilder().with_ollama(model, base_url).build()
     extractor = WebExtractor(config)
     return extractor.extract(url)

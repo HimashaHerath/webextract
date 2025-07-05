@@ -3,7 +3,13 @@
 import logging
 from typing import Any, Dict
 
-from .exceptions import AuthenticationError, LLMError, ModelNotAvailableError
+from .exceptions import (
+    AuthenticationError,
+    ErrorHandler,
+    LLMError,
+    ModelNotAvailableError,
+    RateLimitError,
+)
 from .llm_client import BaseLLMClient
 
 logger = logging.getLogger(__name__)
@@ -27,9 +33,15 @@ class OpenAIClient(BaseLLMClient):
 
             self._client = openai.OpenAI(api_key=self.api_key, base_url=self.base_url)
         except ImportError:
-            raise LLMError("OpenAI package not installed. Install with: pip install openai")
+            raise LLMError(
+                "OpenAI package not installed",
+                provider="openai",
+                suggestions=["Install with: pip install openai"],
+            )
         except Exception as e:
-            raise AuthenticationError(f"Failed to setup OpenAI client: {e}")
+            raise AuthenticationError(
+                "Failed to setup OpenAI client", provider="openai", original_error=e
+            )
 
     def is_model_available(self) -> bool:
         """Check if the specified model is available."""
@@ -40,7 +52,12 @@ class OpenAIClient(BaseLLMClient):
             return self.model_name in available_models
         except Exception as e:
             logger.error(f"Failed to check model availability: {e}")
-            return False
+            raise ModelNotAvailableError(
+                "Cannot check model availability",
+                requested_model=self.model_name,
+                provider="openai",
+                original_error=e,
+            )
 
     def generate_structured_data(
         self,
@@ -119,23 +136,43 @@ CRITICAL RULES:
                 except Exception as e:
                     logger.error(f"OpenAI generation failed (attempt {attempt + 1}): {e}")
                     if "rate_limit" in str(e).lower():
-                        raise LLMError(f"OpenAI rate limit exceeded: {e}")
+                        raise RateLimitError(
+                            "OpenAI rate limit exceeded",
+                            limit_type="api_requests",
+                            provider="openai",
+                            original_error=e,
+                        )
                     elif "authentication" in str(e).lower():
-                        raise AuthenticationError(f"OpenAI authentication failed: {e}")
+                        raise AuthenticationError(
+                            "OpenAI authentication failed", provider="openai", original_error=e
+                        )
                     elif "model" in str(e).lower() and "not found" in str(e).lower():
                         raise ModelNotAvailableError(
-                            f"OpenAI model {self.model_name} not available: {e}"
+                            "OpenAI model not available",
+                            requested_model=self.model_name,
+                            provider="openai",
+                            original_error=e,
                         )
 
                     if attempt == 2:  # Last attempt
-                        raise LLMError(f"OpenAI processing failed after 3 attempts: {e}")
+                        raise LLMError(
+                            "OpenAI processing failed after 3 attempts",
+                            provider="openai",
+                            model_name=self.model_name,
+                            original_error=e,
+                        )
 
             return self._create_safe_fallback(content[:200])
 
         except (AuthenticationError, ModelNotAvailableError, LLMError):
             raise
         except Exception as e:
-            raise LLMError(f"Unexpected error in OpenAI processing: {e}")
+            raise ErrorHandler.handle_with_context(
+                "generate_structured_data",
+                {"model_name": self.model_name, "provider": "openai"},
+                e,
+                ["Check OpenAI API key", "Verify model availability", "Check account credits"],
+            )
 
     def summarize_content(self, content: str, max_length: int = 200) -> str:
         """Generate a brief summary using OpenAI."""

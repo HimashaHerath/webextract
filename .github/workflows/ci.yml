@@ -1,23 +1,203 @@
-name: CI
+name: CI/CD Pipeline
 
 on:
   push:
     branches: [ main, develop ]
   pull_request:
     branches: [ main ]
+  workflow_dispatch:
 
 env:
   PYTHON_VERSION: "3.11"
+  CACHE_VERSION: "v1"
+
+# Cancel previous runs for the same branch when new commits are pushed
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  test:
-    name: Test Python ${{ matrix.python-version }}
+  # ============================================================================
+  # CODE QUALITY CHECKS (Fastest feedback for developers)
+  # ============================================================================
+
+  code-quality:
+    name: Code Quality
     runs-on: ubuntu-latest
+    outputs:
+      cache-key: ${{ steps.cache-setup.outputs.cache-key }}
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+
+    - name: Setup cache for quality tools
+      id: cache-setup
+      uses: actions/cache@v4
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-quality-${{ env.CACHE_VERSION }}-${{ hashFiles('**/pyproject.toml', '**/requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-quality-${{ env.CACHE_VERSION }}-
+          ${{ runner.os }}-quality-
+
+    - name: Install code quality tools
+      run: |
+        python -m pip install --upgrade pip
+        pip install black isort flake8 mypy safety bandit[toml]
+
+    - name: Check code formatting (Black)
+      run: |
+        echo "::group::Black formatting check"
+        black --check --diff webextract/ examples/ tests/
+        echo "::endgroup::"
+
+    - name: Check import sorting (isort)
+      run: |
+        echo "::group::Import sorting check"
+        isort --check-only --diff webextract/ examples/ tests/
+        echo "::endgroup::"
+
+    - name: Lint code (flake8)
+      run: |
+        echo "::group::Flake8 linting"
+        flake8 webextract/ --config .flake8 --tee --output-file=flake8-report.txt
+        echo "::endgroup::"
+
+    - name: Type checking (mypy)
+      continue-on-error: true
+      run: |
+        echo "::group::MyPy type checking"
+        mypy webextract/ --ignore-missing-imports --no-strict-optional --txt-report mypy-report
+        echo "::endgroup::"
+
+    - name: Security check (safety)
+      continue-on-error: true
+      run: |
+        echo "::group::Dependency vulnerability check"
+        safety check --json --output safety-report.json
+        echo "::endgroup::"
+
+    - name: Security lint (bandit)
+      continue-on-error: true
+      run: |
+        echo "::group::Security code analysis"
+        bandit -r webextract/ -f json -o bandit-report.json
+        echo "::endgroup::"
+
+    - name: Upload quality reports
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: quality-reports-${{ github.sha }}
+        path: |
+          flake8-report.txt
+          mypy-report/
+          safety-report.json
+          bandit-report.json
+        retention-days: 30
+
+  # ============================================================================
+  # AUTO-FORMAT (Only on pull requests)
+  # ============================================================================
+
+  auto-format:
+    name: Auto-format Code
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    needs: code-quality
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+    - name: Checkout PR code
+      uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        ref: ${{ github.head_ref }}
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+
+    - name: Restore cache for formatting tools
+      uses: actions/cache@v4
+      with:
+        path: ~/.cache/pip
+        key: ${{ needs.code-quality.outputs.cache-key }}
+        restore-keys: |
+          ${{ runner.os }}-quality-${{ env.CACHE_VERSION }}-
+
+    - name: Install formatting tools
+      run: |
+        python -m pip install --upgrade pip
+        pip install black isort
+
+    - name: Format code
+      run: |
+        echo "::group::Auto-formatting with black"
+        black webextract/ examples/ tests/
+        echo "::endgroup::"
+
+        echo "::group::Sorting imports with isort"
+        isort webextract/ examples/ tests/
+        echo "::endgroup::"
+
+    - name: Check for changes
+      id: verify-changed-files
+      run: |
+        if [ -n "$(git status --porcelain)" ]; then
+          echo "changed=true" >> $GITHUB_OUTPUT
+          echo "Files were auto-formatted"
+        else
+          echo "changed=false" >> $GITHUB_OUTPUT
+          echo "No formatting changes needed"
+        fi
+
+    - name: Commit and push changes
+      if: steps.verify-changed-files.outputs.changed == 'true'
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        git add -A
+        git commit -m "🤖 Auto-format code with black and isort
+
+        Automatically formatted code to maintain consistent style.
+
+        🤖 Generated with [Claude Code](https://claude.ai/code)
+
+        Co-Authored-By: Claude <noreply@anthropic.com>"
+        git push
+
+    - name: Comment on PR
+      if: steps.verify-changed-files.outputs.changed == 'true'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: '🤖 **Auto-formatted code**\n\nI automatically formatted your code with `black` and `isort` to maintain consistent code style. The changes have been pushed to this PR.\n\n📋 **What was formatted:**\n- Code formatting with Black\n- Import sorting with isort\n\nPlease review the changes and ensure they look correct.'
+          })
+
+  # ============================================================================
+  # TESTING (Run tests across multiple Python versions)
+  # ============================================================================
+
+  test:
+    name: Test (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    needs: code-quality
     strategy:
       fail-fast: false
       matrix:
         python-version: ["3.8", "3.9", "3.10", "3.11", "3.12"]
-
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
@@ -31,10 +211,10 @@ jobs:
       uses: actions/cache@v4
       with:
         path: ~/.cache/pip
-        key: ${{ runner.os }}-pip-${{ matrix.python-version }}-${{ hashFiles('**/pyproject.toml', '**/requirements.txt') }}
+        key: ${{ runner.os }}-test-${{ matrix.python-version }}-${{ env.CACHE_VERSION }}-${{ hashFiles('**/pyproject.toml', '**/requirements.txt') }}
         restore-keys: |
-          ${{ runner.os }}-pip-${{ matrix.python-version }}-
-          ${{ runner.os }}-pip-
+          ${{ runner.os }}-test-${{ matrix.python-version }}-${{ env.CACHE_VERSION }}-
+          ${{ runner.os }}-test-${{ matrix.python-version }}-
 
     - name: Install system dependencies
       run: |
@@ -52,113 +232,44 @@ jobs:
         python -c "import webextract; print(f'✅ WebExtract {webextract.__version__} imported successfully')"
         python -c "from webextract.core.llm_factory import get_available_providers; print(f'Available providers: {list(get_available_providers().keys())}')"
 
-    - name: Run tests
+    - name: Run tests with coverage
       run: |
-        xvfb-run -a pytest tests/ -v --tb=short --color=yes
+        echo "::group::Running test suite"
+        xvfb-run -a pytest tests/ -v --tb=short --color=yes \
+          --cov=webextract --cov-report=xml --cov-report=term-missing \
+          --junitxml=test-results-${{ matrix.python-version }}.xml
+        echo "::endgroup::"
       env:
         PYTEST_ADDOPTS: "--strict-markers --strict-config"
 
     - name: Upload test results
       uses: actions/upload-artifact@v4
-      if: failure()
-      with:
-        name: test-results-${{ matrix.python-version }}
-        path: |
-          pytest.log
-          test-results.xml
-
-  code-quality:
-    name: Code Quality
-    runs-on: ubuntu-latest
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: ${{ env.PYTHON_VERSION }}
-
-    - name: Cache pip dependencies
-      uses: actions/cache@v4
-      with:
-        path: ~/.cache/pip
-        key: ${{ runner.os }}-pip-quality-${{ hashFiles('**/pyproject.toml') }}
-
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install black isort flake8 mypy
-
-    - name: Check code formatting
-      run: |
-        echo "::group::Black formatting check"
-        black --check --diff webextract/ examples/
-        echo "::endgroup::"
-
-    - name: Check import sorting
-      run: |
-        echo "::group::Import sorting check"
-        isort --check-only --diff webextract/ examples/
-        echo "::endgroup::"
-
-    - name: Lint with flake8
-      run: |
-        echo "::group::Flake8 linting"
-        flake8 webextract/ --config .flake8
-        echo "::endgroup::"
-
-    - name: Type checking
-      continue-on-error: true
-      run: |
-        echo "::group::MyPy type checking"
-        mypy webextract/ --ignore-missing-imports --no-strict-optional
-        echo "::endgroup::"
-
-  security:
-    name: Security Analysis
-    runs-on: ubuntu-latest
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: ${{ env.PYTHON_VERSION }}
-
-    - name: Install security tools
-      run: |
-        python -m pip install --upgrade pip
-        pip install safety bandit[toml]
-
-    - name: Check dependencies for vulnerabilities
-      run: |
-        echo "::group::Safety check"
-        safety check --json --output safety-report.json || echo "Security vulnerabilities found"
-        echo "::endgroup::"
-      continue-on-error: true
-
-    - name: Run security linter
-      run: |
-        echo "::group::Bandit security analysis"
-        bandit -r webextract/ -f json -o bandit-report.json || echo "Security issues found"
-        echo "::endgroup::"
-      continue-on-error: true
-
-    - name: Upload security reports
-      uses: actions/upload-artifact@v4
       if: always()
       with:
-        name: security-reports
+        name: test-results-${{ matrix.python-version }}-${{ github.sha }}
         path: |
-          safety-report.json
-          bandit-report.json
+          test-results-${{ matrix.python-version }}.xml
+          coverage.xml
+          pytest.log
+        retention-days: 30
+
+    - name: Upload coverage to Codecov
+      if: matrix.python-version == env.PYTHON_VERSION
+      uses: codecov/codecov-action@v4
+      with:
+        file: ./coverage.xml
+        flags: unittests
+        name: codecov-umbrella
+        fail_ci_if_error: false
+
+  # ============================================================================
+  # BUILD & PACKAGE
+  # ============================================================================
 
   build:
     name: Build Package
     runs-on: ubuntu-latest
-    needs: [test, code-quality]
+    needs: [code-quality, test]
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
@@ -167,6 +278,14 @@ jobs:
       uses: actions/setup-python@v5
       with:
         python-version: ${{ env.PYTHON_VERSION }}
+
+    - name: Cache build dependencies
+      uses: actions/cache@v4
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-build-${{ env.CACHE_VERSION }}-build-tools
+        restore-keys: |
+          ${{ runner.os }}-build-${{ env.CACHE_VERSION }}-
 
     - name: Install build tools
       run: |
@@ -175,20 +294,23 @@ jobs:
 
     - name: Build package
       run: |
-        echo "::group::Building package"
+        echo "::group::Building source and wheel distributions"
         python -m build
         echo "::endgroup::"
 
-    - name: Check package
+    - name: Verify package integrity
       run: |
-        echo "::group::Package validation"
+        echo "::group::Package verification"
         twine check dist/*
         echo "::endgroup::"
 
-    - name: List package contents
+    - name: Display package info
       run: |
         echo "::group::Package contents"
         ls -la dist/
+        echo "::endgroup::"
+
+        echo "::group::Source distribution contents (first 20 files)"
         tar -tzf dist/*.tar.gz | head -20
         echo "::endgroup::"
 
@@ -197,4 +319,89 @@ jobs:
       with:
         name: dist-${{ github.sha }}
         path: dist/
-        retention-days: 7
+        retention-days: 90
+
+  # ============================================================================
+  # INTEGRATION TEST (Optional - can be extended)
+  # ============================================================================
+
+  integration-test:
+    name: Integration Test
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+
+    - name: Download build artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: dist-${{ github.sha }}
+        path: dist/
+
+    - name: Test package installation
+      run: |
+        echo "::group::Installing from wheel"
+        pip install dist/*.whl
+        echo "::endgroup::"
+
+        echo "::group::Testing CLI"
+        python -c "from webextract.cli import main; main()" version
+        echo "::endgroup::"
+
+        echo "::group::Testing basic import"
+        python -c "import webextract; print(f'Package version: {webextract.__version__}')"
+        echo "::endgroup::"
+
+  # ============================================================================
+  # SUMMARY JOB (For status checks)
+  # ============================================================================
+
+  ci-success:
+    name: CI Pipeline Success
+    runs-on: ubuntu-latest
+    needs: [code-quality, test, build]
+    if: always()
+    steps:
+    - name: Check all jobs status
+      run: |
+        if [ "${{ needs.code-quality.result }}" != "success" ]; then
+          echo "❌ Code quality checks failed"
+          exit 1
+        fi
+
+        if [ "${{ needs.test.result }}" != "success" ]; then
+          echo "❌ Tests failed"
+          exit 1
+        fi
+
+        if [ "${{ needs.build.result }}" != "success" ]; then
+          echo "❌ Build failed"
+          exit 1
+        fi
+
+        echo "✅ All CI checks passed successfully!"
+
+    - name: Report results
+      if: always()
+      run: |
+        echo "## 📊 CI Pipeline Results" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "| Job | Status |" >> $GITHUB_STEP_SUMMARY
+        echo "|-----|--------|" >> $GITHUB_STEP_SUMMARY
+        echo "| Code Quality | ${{ needs.code-quality.result == 'success' && '✅ Pass' || '❌ Fail' }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Tests | ${{ needs.test.result == 'success' && '✅ Pass' || '❌ Fail' }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Build | ${{ needs.build.result == 'success' && '✅ Pass' || '❌ Fail' }} |" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+
+        if [ "${{ needs.code-quality.result }}" == "success" ] && [ "${{ needs.test.result }}" == "success" ] && [ "${{ needs.build.result }}" == "success" ]; then
+          echo "🎉 **All checks passed!** The code is ready for merge." >> $GITHUB_STEP_SUMMARY
+        else
+          echo "⚠️ **Some checks failed.** Please review the issues above." >> $GITHUB_STEP_SUMMARY
+        fi

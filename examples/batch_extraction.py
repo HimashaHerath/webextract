@@ -12,9 +12,17 @@ Requirements:
 """
 
 import json
+import os
+import sys
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from pathlib import Path
 from typing import Any, Dict, List
+
+# Add the tests directory to the path for test data access
+sys.path.insert(0, str(Path(__file__).parent.parent / "tests"))
+
+from example_test_data import TestDataCategories
 
 from webextract import ConfigBuilder, ConfigProfiles, WebExtractor
 
@@ -63,13 +71,13 @@ def main():
     print("🚀 WebExtract - Batch Extraction Example")
     print("=" * 60)
 
-    # List of URLs to process
-    urls = [
-        "https://dev.to/nodeshiftcloud/claude-4-opus-vs-sonnet-benchmarks-and-dev-workflow-with-claude-code-11fa",  # noqa: E501
-        "https://dev.to/openai/introducing-gpt-4o-mini-64g",
-        "https://dev.to/anthropic/claude-3-5-sonnet-now-available-36a1",
-        # Add more URLs as needed
-    ]
+    # Use reliable test URLs instead of hardcoded URLs that may break
+    print("🔗 Using reliable test URLs from managed test data...")
+    urls = TestDataCategories.get_batch_urls(3)  # Get 3 URLs for batch processing
+
+    print("📋 Test URLs:")
+    for i, url in enumerate(urls, 1):
+        print(f"   {i}. {url}")
 
     print(f"📋 Processing {len(urls)} URLs...")
 
@@ -195,8 +203,10 @@ def main():
             for org, count in sorted_orgs:
                 print(f"   • {org} ({count} mentions)")
 
-        # Save results to file
-        output_file = "examples/batch_results.json"
+        # Save results to file (create examples directory if needed)
+        examples_dir = Path("examples")
+        examples_dir.mkdir(exist_ok=True)
+        output_file = examples_dir / "batch_results.json"
         with open(output_file, "w", encoding="utf-8") as f:
             json.dump(parallel_results, f, indent=2, ensure_ascii=False)
 
