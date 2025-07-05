@@ -202,6 +202,34 @@ class DataExtractor:
         """
         return self.extract(url, schema=extraction_schema)
 
+    def extract_with_summary(
+        self, url: str, max_length: int = 200, force_refresh: bool = False
+    ) -> Optional[StructuredData]:
+        """Extract content and update summary only.
+
+        This helper delegates to :meth:`extract` and then generates a short
+        summary of the main content using the configured LLM client. The
+        resulting :class:`StructuredData` object is returned with the summary
+        inserted into ``structured_info``.
+        """
+
+        result = self.extract(url, force_refresh=force_refresh)
+
+        if result and getattr(result, "content", None):
+            try:
+                summary = self.llm_client.summarize_content(
+                    result.content.main_content, max_length=max_length
+                )
+
+                if isinstance(result.structured_info, dict):
+                    result.structured_info["summary"] = summary
+                elif hasattr(result.structured_info, "summary"):
+                    result.structured_info.summary = summary
+            except Exception as e:  # pragma: no cover - summary failure shouldn't crash
+                logger.error(f"Summary generation failed for {url}: {e}")
+
+        return result
+
     def _validate_url(self, url: str) -> bool:
         """Validate URL format."""
         try:

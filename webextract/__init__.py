@@ -9,7 +9,21 @@ try:
 except ImportError:
     from importlib_metadata import version
 
-__version__ = version("llm-webextract")
+try:
+    __version__ = version("llm-webextract")
+except Exception:  # Package not installed
+    from pathlib import Path
+
+    try:
+        pyproject = Path(__file__).resolve().parent.parent / "pyproject.toml"
+        for line in pyproject.read_text().splitlines():
+            if line.startswith("version ="):
+                __version__ = line.split("=")[1].strip().strip('"')
+                break
+        else:
+            __version__ = "0.0.0"
+    except Exception:
+        __version__ = "0.0.0"
 __author__ = "Himasha Herath"
 __description__ = "AI-powered web content extraction with Large Language Models"
 

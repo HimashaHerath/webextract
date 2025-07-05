@@ -3,6 +3,7 @@
 import asyncio
 from unittest.mock import Mock, patch
 
+import importlib.metadata
 import webextract
 from webextract import WebExtractor
 
@@ -45,7 +46,10 @@ def test_quick_extract(mock_extract):
 def test_version():
     """Test package version is available."""
     assert hasattr(webextract, "__version__")
-    assert webextract.__version__ == "1.2.4"
+    import importlib.metadata
+
+    package_version = importlib.metadata.version("llm-webextract")
+    assert webextract.__version__ == package_version
 
 
 def test_author():
