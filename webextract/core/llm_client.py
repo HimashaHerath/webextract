@@ -124,7 +124,7 @@ class OllamaClient(BaseLLMClient):
         """Check if the specified model is available."""
         try:
             models = self.client.list()
-            available_models = [model["name"] for model in models["models"]]
+            available_models = [model.model for model in models.models]
             logger.debug(f"Looking for model: '{self.model_name}'")
             logger.debug(f"Available models: {available_models}")
 
