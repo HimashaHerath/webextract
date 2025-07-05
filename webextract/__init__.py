@@ -5,11 +5,26 @@ immediate error feedback, and proper type hints.
 """
 
 try:
-    from importlib.metadata import version
-except ImportError:
-    from importlib_metadata import version
+    from importlib.metadata import version, PackageNotFoundError
+except ImportError:  # pragma: no cover - for Python <3.10
+    from importlib_metadata import version, PackageNotFoundError
 
-__version__ = version("llm-webextract")
+try:
+    __version__ = version("llm-webextract")
+except PackageNotFoundError:
+    # Package is not installed, read version from pyproject.toml
+    from pathlib import Path
+    import re
+
+    root = Path(__file__).resolve().parents[1]
+    pyproject = root / "pyproject.toml"
+    version_pattern = re.compile(r"^version\s*=\s*['\"](.+?)['\"]", re.M)
+    try:
+        text = pyproject.read_text()
+        match = version_pattern.search(text)
+        __version__ = match.group(1) if match else "0.0.0"
+    except Exception:  # pragma: no cover - failure fallback
+        __version__ = "0.0.0"
 __author__ = "Himasha Herath"
 __description__ = "AI-powered web content extraction with Large Language Models"
 
